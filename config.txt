@@ -1,0 +1,6 @@
+tokensite = xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+tokenbot = xxxxxxxxxx:yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+chatID = -xxxxxxxxxxxxx
+SS1 = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+SS2 = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+SS3 = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
