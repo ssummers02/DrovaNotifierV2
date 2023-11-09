@@ -298,22 +298,19 @@ func sessionInfo(status string) (infoString string) {
 	responseString := buf.String()
 	var data SessionsData                         // структура SessionsData
 	json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
-	// var sessionOff, sessionDur string = "", ""
 
 	comment := strings.ReplaceAll(data.Sessions[0].Abort_comment, ";", ":")
 	sessionOn, _ := dateTimeS(data.Sessions[0].Created_on)
 	game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
 	city, asn, region := ipInf(data.Sessions[0].Creator_ip)
 
-	// формируем текст для отправки
-	if status == "Start" {
+	if status == "Start" { // формируем текст для отправки
 		infoString = hostname + " - " + data.Sessions[0].Creator_ip + "\n\n" + sessionOn + "\nИгра: " + game
 		infoString += "\nГород: " + city + "\nРегион: " + region + "\nПровайдер: " + asn + "\nОплата: " + data.Sessions[0].Billing_type
 		fmt.Println(infoString)
 		fmt.Println()
 		return
-	} else { // иначе, записываем значение окончания сессии и высчитываем продолжительность сессии
-		// sessionOff, _ := dateTimeS(data.Sessions[0].Finished_on)
+	} else { // высчитываем продолжительность сессии и формируем текст для отправки
 		_, stopTime := dateTimeS(data.Sessions[0].Finished_on)
 		_, startTime := dateTimeS(data.Sessions[0].Created_on)
 		sessionDur := dur(stopTime, startTime)
