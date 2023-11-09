@@ -31,10 +31,9 @@ var (
 )
 
 const (
-	appName    = "ese.exe"                                            // Имя запускаемого файла
-	newTitle   = "Drova Notifier v2"                                  // Имя окна программы
-	timeFormat = "02.01.2006 15:04:05"                                // Формат даты
-	url        = "https://services.drova.io/session-manager/sessions" // инфо по сессиям
+	appName  = "ese.exe"                                            // Имя запускаемого файла
+	newTitle = "Drova Notifier v2"                                  // Имя окна программы
+	url      = "https://services.drova.io/session-manager/sessions" // инфо по сессиям
 )
 
 type Product struct {
@@ -65,9 +64,9 @@ type SessionsData struct {
 
 func main() {
 	// Следующие 3 строки вводим свои данные. Чат ID будет с - в начале если это общий чат, и без - если это личка
-	authToken = "xxxxxxxx-xxxxx-xxxx-xxxx-xxxxxxxxxx"      // токен для авторизации на сайте
-	BotToken = "xxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" // токен бота
-	Chat_IDint = -00000000000000                           // ID чата получателя
+	// authToken = "111111111111"          	// токен для авторизации на сайте
+	// BotToken = "11111111" 				// токен бота
+	// Chat_IDint = -1111111                // определяем ID чата получателя
 
 	setConsoleTitle(newTitle) // Устанавливаем новое имя окна
 
@@ -101,15 +100,15 @@ func main() {
 	gameID(fileGames) // получение списка ID игры - Название игры и сохранение в файл gamesID.txt
 
 	//блок для получения данных из конфига
-	/*
-		authToken, _ = readConfig("tokensite", config) // получаем токен для авторизации на сайте
-		BotToken, _ = readConfig("tokenbot", config)   // получаем токен этого бота
-		Chat_ID, _ = readConfig("chatID", config)      // определяем ID получателя
-		Chat_IDint, err := strconv.ParseInt(Chat_ID, 10, 64) // конвертируем ID чата в int64
-		if err != nil {
-			log.Println("Error: ", err, getLine())
-		}
-	*/
+	// /*
+	authToken, _ = readConfig("tokensite", fileConfig)   // получаем токен для авторизации на сайте
+	BotToken, _ = readConfig("tokenbot", fileConfig)     // получаем токен этого бота
+	Chat_ID, _ := readConfig("chatID", fileConfig)       // определяем ID получателя
+	Chat_IDint, err := strconv.ParseInt(Chat_ID, 10, 64) // конвертируем ID чата в int64
+	if err != nil {
+		log.Println("Error: ", err, getLine())
+	}
+	// */
 
 	// Получаем имя ПК
 	hostname, err = os.Hostname()
@@ -331,7 +330,7 @@ func dateTimeS(data int64) (string, time.Time) {
 	t := time.Unix(seconds, nanoseconds)
 
 	// Форматирование времени
-	formattedTime := t.Format(timeFormat)
+	formattedTime := t.Format("2006-01-02 15:04:05")
 
 	return formattedTime, t
 }
