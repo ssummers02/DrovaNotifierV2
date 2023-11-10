@@ -14,19 +14,16 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
-	"unsafe"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"golang.org/x/sys/windows/registry"
 )
 
 var (
 	BotToken, fileConfig, fileGames string
 	serverID, authToken, hostname   string
 	Chat_IDint                      int64
-	kernel32                        = syscall.NewLazyDLL("kernel32.dll")
-	procSetConsoleTitleW            = kernel32.NewProc("SetConsoleTitleW")
 	isRunning                       bool
 )
 
@@ -63,16 +60,12 @@ type SessionsData struct {
 }
 
 func main() {
-	// Следующие 3 строки вводим свои данные. Чат ID будет с - в начале если это общий чат, и без - если это личка
-	// authToken = "111111111111"          	// токен для авторизации на сайте
-	// BotToken = "11111111" 				// токен бота
-	// Chat_IDint = -1111111                // определяем ID чата получателя
+	// Следующие 2 строки вводим свои данные. Чат ID будет с - в начале если это общий чат, и без - если это личка
+	// BotToken = "11111111:sdsdfsdde" 			// токен бота
+	// Chat_IDint = -1111111                	// определяем ID чата получателя
 
-	setConsoleTitle(newTitle) // Устанавливаем новое имя окна
-
-	logFilePath := "errors.log" // Имя файла для логирования ошибок
+	logFilePath := "log.log" // Имя файла для логирования ошибок
 	logFilePath = filepath.Join(filepath.Dir(os.Args[0]), logFilePath)
-
 	// Открываем файл для записи логов
 	logFile, err := os.OpenFile(logFilePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
@@ -84,39 +77,39 @@ func main() {
 	if err != nil {
 		log.Fatal("Ошибка получения текущей деректории: ", err, getLine())
 	}
-
 	// Устанавливаем файл в качестве вывода для логгера
 	log.SetOutput(logFile)
 
 	log.Println("Start program")
-	fmt.Println("Start program")
+
 	fileGames = filepath.Join(dir, "games.txt")
 	fileConfig = filepath.Join(dir, "config.txt")
-	fmt.Println(fileGames)
 	log.Println(fileGames)
-	fmt.Println(fileConfig)
 	log.Println(fileConfig)
-	fmt.Println()
+
 	gameID(fileGames) // получение списка ID игры - Название игры и сохранение в файл gamesID.txt
 
 	//блок для получения данных из конфига
 	// /*
-	authToken, _ = readConfig("tokensite", fileConfig)   // получаем токен для авторизации на сайте
 	BotToken, _ = readConfig("tokenbot", fileConfig)     // получаем токен этого бота
-	Chat_ID, _ := readConfig("chatID", fileConfig)       // определяем ID получателя
+	Chat_ID, _ := readConfig("chatID", fileConfig)       // определяем ID чата
 	Chat_IDint, err := strconv.ParseInt(Chat_ID, 10, 64) // конвертируем ID чата в int64
 	if err != nil {
 		log.Println("Error: ", err, getLine())
 	}
 	// */
 
+	regFolder := `SOFTWARE\ITKey\Esme`
+	serverID = regGet(regFolder, "last_server") // получаем ID сервера
+	regFolder += `\servers\` + serverID
+	authToken = regGet(regFolder, "auth_token") // получаем токен для авторизации
+
 	// Получаем имя ПК
 	hostname, err = os.Hostname()
 	if err != nil {
-		log.Println("Ошибка при получении имени компьютера: ", err, getLine())
+		log.Println("Ошибка при получении имени компьютера: ", err, "\nOшибка в строке", getLine())
 		return
 	}
-	serverID, _ = readConfig(hostname, fileConfig) // смотря на имя ПК ищем ID станции
 
 	for {
 		for i := 0; i != 2; { //ждем запуска приложения ese.exe
@@ -214,16 +207,11 @@ func SendMessage(botToken string, chatID int64, text string) error {
 	return nil
 }
 
-// для смены заголовока программы
-func setConsoleTitle(title string) {
-	ptrTitle, _ := syscall.UTF16PtrFromString(title)
-	_, _, _ = procSetConsoleTitleW.Call(uintptr(unsafe.Pointer(ptrTitle)))
-}
-
 // получение строки кода где возникла ошибка
-func getLine() int {
+func getLine() string {
 	_, _, line, _ := runtime.Caller(1)
-	return line
+	lineErr := fmt.Sprintf("\nОшибка в строке: %d", line)
+	return lineErr
 }
 
 func gameID(fileGames string) {
@@ -306,16 +294,17 @@ func sessionInfo(status string) (infoString string) {
 	if status == "Start" { // формируем текст для отправки
 		infoString = hostname + " - " + data.Sessions[0].Creator_ip + "\n\n" + sessionOn + "\nИгра: " + game
 		infoString += "\nГород: " + city + "\nРегион: " + region + "\nПровайдер: " + asn + "\nОплата: " + data.Sessions[0].Billing_type
-		fmt.Println(infoString)
 		fmt.Println()
 		return
 	} else { // высчитываем продолжительность сессии и формируем текст для отправки
 		_, stopTime := dateTimeS(data.Sessions[0].Finished_on)
 		_, startTime := dateTimeS(data.Sessions[0].Created_on)
 		sessionDur := dur(stopTime, startTime)
+		log.Printf("Начало сессии: %d -> %s.\n", data.Sessions[0].Created_on, startTime)
+		log.Printf("Завершение сессии: %d -> %s.\n", data.Sessions[0].Finished_on, stopTime)
+		log.Printf("Продолжительность сессии: %s", sessionDur)
 		infoString = hostname + " - " + data.Sessions[0].Creator_ip + "\nИгра: " + game
 		infoString += "\nПродолжительность сессии: " + sessionDur + "\nКомментарий: " + comment
-		fmt.Println(infoString)
 		fmt.Println()
 		return
 	}
@@ -337,10 +326,15 @@ func dateTimeS(data int64) (string, time.Time) {
 
 func dur(stopTime, startTime time.Time) (sessionDur string) {
 	duration := stopTime.Sub(startTime).Round(time.Second)
+	log.Println("func dur.duration - ", duration)
 	hours := int(duration.Hours())
+	log.Println("func dur.hours - ", hours)
 	minutes := int(duration.Minutes()) % 60
+	log.Println("func dur.minutes - ", minutes)
 	seconds := int(duration.Seconds()) % 60
+	log.Println("func dur.seconds - ", seconds)
 	hou := strconv.Itoa(hours)
+	log.Println("func dur.hou - ", hou)
 	sessionDur = ""
 	if hours < 2 {
 		sessionDur = sessionDur + "0" + hou + ":"
@@ -348,12 +342,14 @@ func dur(stopTime, startTime time.Time) (sessionDur string) {
 		sessionDur = sessionDur + hou + ":"
 	}
 	min := strconv.Itoa(minutes)
+	log.Println("func dur.min - ", min)
 	if minutes < 10 {
 		sessionDur = sessionDur + "0" + min + ":"
 	} else {
 		sessionDur = sessionDur + min + ":"
 	}
 	sec := strconv.Itoa(seconds)
+	log.Println("func dur.sec - ", sec)
 	if seconds < 10 {
 		sessionDur = sessionDur + "0" + sec
 	} else {
@@ -378,4 +374,22 @@ func ipInf(ip string) (string, string, string) {
 	}
 
 	return ipInfo.City, ipInfo.ISP, ipInfo.Region
+}
+
+// получаем данные из реестра
+func regGet(regFolder, keys string) string {
+
+	key, err := registry.OpenKey(registry.LOCAL_MACHINE, regFolder, registry.QUERY_VALUE)
+	if err != nil {
+		log.Printf("Failed to open registry key: %v\n", err)
+	}
+	defer key.Close()
+
+	value, _, err := key.GetStringValue(keys)
+	if err != nil {
+		log.Printf("Failed to read last_server value: %v\n", err)
+	}
+	// log.Printf("%s - %s: %s\n", keys, regFolder, value)
+
+	return value
 }
