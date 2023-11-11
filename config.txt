@@ -1,2 +1,4 @@
-tokenbot = xxxxxxxxxx:yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
-chatID = -xxxxxxxxxxxxx
+tokenbot = 11111111:sdsdfsdde
+chatID = -1111111
+//onlineIpInfo может принимать значение только false или true. false - инфо по IP используя оффлайн базу GeoLite, true - инфо по IP через сайт ipinfo.io
+onlineIpInfo = false
