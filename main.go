@@ -94,7 +94,7 @@ func main() {
 	BotToken = "11111111:sdsdfsdde" // токен бота
 	Chat_IDint = -1002054147798     // определяем ID чата получателя
 	onlineIpInfo = false            // false - инфо по IP используя оффлайн базу GeoLite, true - инфо по IP через сайт ipinfo.io
-	checkFreeSpace = true
+	checkFreeSpace = true           // проверка свободного места на дисках. true - проверка включена, false - выключена
 
 	logFilePath := "log.log" // Имя файла для логирования ошибок
 	logFilePath = filepath.Join(filepath.Dir(os.Args[0]), logFilePath)
@@ -380,7 +380,7 @@ func sessionInfo(status string) (infoString string) {
 	comment := strings.ReplaceAll(data.Sessions[0].Abort_comment, ";", ":")
 	sessionOn, _ := dateTimeS(data.Sessions[0].Created_on)
 	game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
-	game = "\nИгра: " + game
+	// game = "\nИгра: " + game
 	ipInfo = ""
 	if onlineIpInfo {
 		ipInfo = ipInf(data.Sessions[0].Creator_ip)
