@@ -17,8 +17,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StackExchange/wmi"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/oschwald/maxminddb-golang"
+	"github.com/shirou/gopsutil/disk"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -26,7 +28,7 @@ var (
 	BotToken, fileConfig, fileGames, hostname      string
 	serverID, authToken, mmdbASN, mmdbCity, ipInfo string
 	Chat_IDint                                     int64
-	isRunning, onlineIpInfo                        bool
+	isRunning, onlineIpInfo, checkFreeSpace        bool
 )
 
 const (
@@ -35,6 +37,7 @@ const (
 	url      = "https://services.drova.io/session-manager/sessions" // инфо по сессиям
 )
 
+// для выгрузки названий игр с их ID
 type Product struct {
 	ProductID string `json:"productId"`
 	Title     string `json:"title"`
@@ -54,26 +57,26 @@ type SessionsData struct {
 	}
 }
 
-// для получения провайдера
+// для получения провайдера в оффлайн базе
 type ASNRecord struct {
-	AutonomousSystemNumber       uint32 `maxminddb:"autonomous_system_number"`
+	// AutonomousSystemNumber       uint32 `maxminddb:"autonomous_system_number"`
 	AutonomousSystemOrganization string `maxminddb:"autonomous_system_organization"`
 }
 
-// для получения города
+// для получения города региона в оффлайн базе
 type CityRecord struct {
 	City struct {
 		Names map[string]string `maxminddb:"names"`
 	} `maxminddb:"city"`
-	Country struct {
+	// Country struct {
+	// 	Names map[string]string `maxminddb:"names"`
+	// } `maxminddb:"country"`
+	Subdivision []struct {
 		Names map[string]string `maxminddb:"names"`
-	} `maxminddb:"country"`
-	Location struct {
-		Latitude  float64 `maxminddb:"latitude"`
-		Longitude float64 `maxminddb:"longitude"`
-	} `maxminddb:"location"`
+	} `maxminddb:"subdivisions"`
 }
 
+// online инфо по IP
 type IPInfoResponse struct {
 	IP     string `json:"ip"`
 	City   string `json:"city"`
@@ -81,11 +84,17 @@ type IPInfoResponse struct {
 	ISP    string `json:"org"`
 }
 
+// для получения времени запуска windows
+type Win32_OperatingSystem struct {
+	LastBootUpTime time.Time
+}
+
 func main() {
 	// Следующие 2 строки вводим свои данные. Чат ID будет с - в начале если это общий чат, и без - если это личка
 	BotToken = "11111111:sdsdfsdde" // токен бота
-	Chat_IDint = -1111111           // определяем ID чата получателя
-	onlineIpInfo = true             // false - инфо по IP используя оффлайн базу GeoLite, true - инфо по IP через сайт ipinfo.io
+	Chat_IDint = -1002054147798     // определяем ID чата получателя
+	onlineIpInfo = false            // false - инфо по IP используя оффлайн базу GeoLite, true - инфо по IP через сайт ipinfo.io
+	checkFreeSpace = true
 
 	logFilePath := "log.log" // Имя файла для логирования ошибок
 	logFilePath = filepath.Join(filepath.Dir(os.Args[0]), logFilePath)
@@ -140,6 +149,16 @@ func main() {
 		} else if onlineIpInf == "false" {
 			onlineIpInfo = false
 		}
+		checkSpace, err := readConfig("checkFreeSpace", fileConfig) // определяем ID чата
+		if err != nil {
+			log.Printf("Ошибка - %s. %s\n", err, getLine())
+		}
+		if checkSpace == "true" {
+			checkFreeSpace = true
+		} else if checkSpace == "false" {
+			checkFreeSpace = false
+		}
+
 	}
 
 	mmdbASN = filepath.Join(dir, "GeoLite2-ASN.mmdb")
@@ -177,6 +196,10 @@ func main() {
 	if err != nil {
 		log.Println("Ошибка при получении имени компьютера: ", err, "\nOшибка в строке", getLine())
 		return
+	}
+	messageStartWin(hostname) // проверка времени запуска станции
+	if checkFreeSpace {
+		diskSpace(hostname) // проверка свободного места на дисках
 	}
 
 	for {
@@ -370,8 +393,12 @@ func sessionInfo(status string) (infoString string) {
 
 		asn := asnRecord.AutonomousSystemOrganization // провайдер клиента
 		city := cityRecord.City.Names["ru"]           // город клиента
+		region := cityRecord.Subdivision[0].Names["ru"]
 		if city != "" {
 			ipInfo = "\nГород: " + city
+		}
+		if region != "" {
+			ipInfo += "\nРегион: " + region
 		}
 		if asn != "" {
 			ipInfo += "\nПровайдер: " + asn
@@ -384,7 +411,7 @@ func sessionInfo(status string) (infoString string) {
 		if billing != "" {
 			billing = "\nОплата: " + data.Sessions[0].Billing_type
 		}
-		infoString = "[Start]\n" + hostname + " - " + data.Sessions[0].Creator_ip + "\n\n" + sessionOn + game + ipInfo + billing
+		infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + "\n" + sessionOn + ipInfo + billing
 		fmt.Println()
 		return
 	} else { // высчитываем продолжительность сессии и формируем текст для отправки
@@ -394,7 +421,7 @@ func sessionInfo(status string) (infoString string) {
 		if comment != "" {
 			comment = "\nКомментарий: " + comment
 		}
-		infoString = "[Finish]\n" + hostname + " - " + data.Sessions[0].Creator_ip + game + sessionDur + comment
+		infoString = "[-]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + game + sessionDur + comment
 		fmt.Println()
 		return
 	}
@@ -409,7 +436,7 @@ func dateTimeS(data int64) (string, time.Time) {
 	t := time.Unix(seconds, nanoseconds)
 
 	// Форматирование времени
-	formattedTime := t.Format("2006-01-02 15:04:05")
+	formattedTime := t.Format("02-01-2006 15:04:05")
 
 	return formattedTime, t
 }
@@ -485,6 +512,12 @@ func getASNRecord(mmdbCity, mmdbASN string, ip net.IP) (*CityRecord, *ASNRecord,
 		return nil, nil, err
 	}
 
+	var Subdivision CityRecord
+	err = db.Lookup(ip, &Subdivision)
+	if err != nil {
+		return nil, nil, err
+	}
+	// region:= cityRecord.City.Names["ru"]
 	return &recordCity, &recordASN, err
 }
 
@@ -562,4 +595,62 @@ func restart() {
 
 	// Завершаем текущий процесс
 	os.Exit(0)
+}
+
+func messageStartWin(hostname string) {
+	var osInfo []Win32_OperatingSystem
+	err := wmi.Query("SELECT LastBootUpTime FROM Win32_OperatingSystem", &osInfo)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	lastBootUpTime := osInfo[0].LastBootUpTime
+	formattedTime := lastBootUpTime.Format("02-01-2006 15:04:05")
+	log.Println("Windows запущен - ", formattedTime)
+	// Получаем текущее время
+	currentTime := time.Now()
+
+	// Вычисляем разницу во времени
+	duration := currentTime.Sub(lastBootUpTime)
+
+	// Если прошло менее 5 минут с момента запуска Windows
+	if duration.Minutes() < 5 {
+		message := fmt.Sprintf("Внимание! Станция %s запущена менее 5 минут назад!\nВремя запуска - %s", hostname, formattedTime)
+		err := SendMessage(BotToken, Chat_IDint, message)
+		if err != nil {
+			log.Fatal("Ошибка отправки сообщения: ", err, getLine())
+		}
+	}
+}
+
+// проверяем свободное место на дисках
+func diskSpace(hostname string) {
+	var text string = ""
+	partitions, err := disk.Partitions(false)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, partition := range partitions {
+		usageStat, err := disk.Usage(partition.Mountpoint)
+		if err != nil {
+			log.Printf("Error getting disk usage for %s: %v. %s\n", partition.Mountpoint, err, getLine())
+			continue
+		}
+
+		usedSpacePercent := usageStat.UsedPercent
+
+		if usedSpacePercent > 90 {
+			text += fmt.Sprintf("На диске %s свободного места менее 10%%\n", partition.Mountpoint)
+		}
+	}
+
+	// Если text не пустой, значит есть диск со свободным местом менее 10%, отправляем сообщение
+	if text != "" {
+		message := fmt.Sprintf("Внимание! Станция %s\n%s", hostname, text)
+		err := SendMessage(BotToken, Chat_IDint, message)
+		if err != nil {
+			log.Fatal("Ошибка отправки сообщения: ", err, getLine())
+		}
+	}
 }
