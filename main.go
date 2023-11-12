@@ -421,7 +421,7 @@ func sessionInfo(status string) (infoString string) {
 		if comment != "" {
 			comment = "\nКомментарий: " + comment
 		}
-		infoString = "[-]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + game + sessionDur + comment
+		infoString = "[-]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + sessionDur + comment
 		fmt.Println()
 		return
 	}
