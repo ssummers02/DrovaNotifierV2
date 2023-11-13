@@ -1,6 +1,8 @@
-tokenbot = 11111111:sdsdfsdde
-chatID = -1111111
+tokenbot = 
+chatID = 
 //onlineIpInfo может принимать значение только false или true. false - инфо по IP используя оффлайн базу GeoLite, true - инфо по IP через сайт ipinfo.io
 onlineIpInfo = true
 //onlineIpInfo может принимать значение только false или true. true - проверяем свободное место на дисках, false - не проверяем свободное место на дисках
 checkFreeSpace = true
+// проверка наличия файлов EasyAntiCheat.exe и EasyAntiCheat_EOS.exe
+checkAntiCheat = true

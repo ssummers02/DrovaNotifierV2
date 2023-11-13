@@ -25,11 +25,12 @@ import (
 )
 
 var (
-	BotToken                                       string = "your_bot_token" // токен бота
-	Chat_IDint                                     int64  = -12345           // определяем ID чата получателя
-	fileConfig, fileGames, hostname                string
-	serverID, authToken, mmdbASN, mmdbCity, ipInfo string
-	isRunning, onlineIpInfo, checkFreeSpace        bool
+	BotToken                                string = "enter_your_bot_toket" // токен бота
+	Chat_IDint                              int64  = -1234                  // определяем ID чата получателя
+	fileConfig, fileGames, hostname, ipInfo string
+	serverID, authToken, mmdbASN, mmdbCity  string
+	isRunning, onlineIpInfo                 bool
+	checkFreeSpace, checkAntiCheat          bool
 )
 
 const (
@@ -96,6 +97,8 @@ func main() {
 	onlineIpInfo = false
 	// проверка свободного места на дисках. true - проверка включена, false - выключена
 	checkFreeSpace = true
+	// проверка наличия файлов EasyAntiCheat.exe и EasyAntiCheat_EOS.exe
+	checkAntiCheat = true
 
 	logFilePath := "log.log" // Имя файла для логирования ошибок
 	logFilePath = filepath.Join(filepath.Dir(os.Args[0]), logFilePath)
@@ -159,7 +162,19 @@ func main() {
 		} else if checkSpace == "false" {
 			checkFreeSpace = false
 		}
+		checkACheat, err := readConfig("checkAntiCheat", fileConfig) // определяем ID чата
+		if err != nil {
+			log.Printf("Ошибка - %s. %s\n", err, getLine())
+		}
+		if checkACheat == "true" {
+			checkAntiCheat = true
+		} else if checkACheat == "false" {
+			checkAntiCheat = false
+		}
+	}
 
+	if checkAntiCheat {
+		antiCheat(hostname)
 	}
 
 	mmdbASN = filepath.Join(dir, "GeoLite2-ASN.mmdb")
@@ -684,3 +699,35 @@ func messageSessionOff() {
 // 		log.Fatal(err)
 // 	}
 // }
+
+func antiCheat(hostname string) {
+	// Проверяем наличие файла EasyAntiCheat_EOS.exe
+	filePath := `"C:\Program Files (x86)\EasyAntiCheat_EOS\EasyAntiCheat_EOS.exe"`
+	_, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
+		message := fmt.Sprintf("Внимание! Станция %s\nОтсутствует файл %s", hostname, "EasyAntiCheat_EOS.exe")
+		err := SendMessage(BotToken, Chat_IDint, message)
+		if err != nil {
+			log.Fatal("Ошибка отправки сообщения: ", err, getLine())
+		}
+	} else if err != nil {
+		log.Fatalf("Ошибка при проверке наличия файла: %v\n", err)
+	} else {
+		log.Printf("Файл %s существует\n", filePath)
+	}
+
+	// Проверяем наличие файла EasyAntiCheat.exe
+	filePath1 := `"C:\Program Files (x86)\EasyAntiCheat_EOS\EasyAntiCheat.exe"`
+	_, err = os.Stat(filePath1)
+	if os.IsNotExist(err) {
+		message := fmt.Sprintf("Внимание! Станция %s\nОтсутствует файл %s", hostname, "EasyAntiCheat.exe")
+		err := SendMessage(BotToken, Chat_IDint, message)
+		if err != nil {
+			log.Fatal("Ошибка отправки сообщения: ", err, getLine())
+		}
+	} else if err != nil {
+		log.Fatalf("Ошибка при проверке наличия файла: %v. %s\n", err, getLine())
+	} else {
+		log.Printf("Файл %s существует\n", filePath1)
+	}
+}
