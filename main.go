@@ -25,12 +25,12 @@ import (
 )
 
 var (
-	BotToken                                string = "enter_your_bot_toket" // токен бота
-	Chat_IDint                              int64  = -1234                  // определяем ID чата получателя
-	fileConfig, fileGames, hostname, ipInfo string
-	serverID, authToken, mmdbASN, mmdbCity  string
-	isRunning, onlineIpInfo                 bool
-	checkFreeSpace, checkAntiCheat          bool
+	BotToken                                          string = "enter_your_bot_toket" // токен бота
+	Chat_IDint                                        int64  = -1234                  // определяем ID чата получателя
+	fileConfig, fileGames, hostname, ipInfo           string
+	serverID, authToken, mmdbASN, mmdbCity, trialfile string
+	isRunning, onlineIpInfo                           bool
+	checkFreeSpace, checkAntiCheat                    bool
 )
 
 const (
@@ -120,6 +120,7 @@ func main() {
 
 	fileGames = filepath.Join(dir, "games.txt")
 	fileConfig = filepath.Join(dir, "config.txt")
+	trialfile = filepath.Join(dir, "trial.txt")
 
 	//блок для получения данных из конфига
 	_, err = os.Stat(fileConfig)
@@ -236,12 +237,6 @@ func main() {
 		for i := 0; i != 3; {
 			isRunning = checkIfProcessRunning(appName)
 			if !isRunning {
-				// time.Sleep(5 * time.Second)
-				// chatMessage := sessionInfo("Stop")
-				// err := SendMessage(BotToken, Chat_IDint, chatMessage)
-				// if err != nil {
-				// 	log.Fatal("Ошибка отправки сообщения: ", err, getLine())
-				// }
 				go messageSessionOff()
 				i = 3
 			}
@@ -430,10 +425,19 @@ func sessionInfo(status string) (infoString string) {
 	} else if status == "Stop" { // высчитываем продолжительность сессии и формируем текст для отправки
 		game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
 		// time.Sleep(5 * time.Second)
+
 		_, stopTime := dateTimeS(data.Sessions[0].Finished_on)
 		_, startTime := dateTimeS(data.Sessions[0].Created_on)
-		sessionDur := " - " + dur(stopTime, startTime)
+		duration, minute := dur(stopTime, startTime)
+		sessionDur := " - " + duration
 		time.Sleep(30 * time.Second)
+
+		billing := data.Sessions[0].Billing_type
+		if billing == "trial" {
+			ipTrial := data.Sessions[0].Creator_ip
+			createOrUpdateKeyValue(ipTrial, minute)
+		}
+
 		isRunning = checkIfProcessRunning(appName) // запущена ли уже новая сессия
 		if !isRunning {
 			comment := strings.ReplaceAll(data.Sessions[0].Abort_comment, ";", ":")
@@ -466,7 +470,7 @@ func dateTimeS(data int64) (string, time.Time) {
 	return formattedTime, t
 }
 
-func dur(stopTime, startTime time.Time) (sessionDur string) {
+func dur(stopTime, startTime time.Time) (sessionDur string, minutes int) {
 	if stopTime.String() != "" {
 		duration := stopTime.Sub(startTime).Round(time.Second)
 		hours := int(duration.Hours())
@@ -494,7 +498,8 @@ func dur(stopTime, startTime time.Time) (sessionDur string) {
 	} else {
 		sessionDur = "Ошибка получения времени окончания сессии"
 	}
-	return
+
+	return sessionDur, minutes
 }
 
 // получаем данные из реестра
@@ -702,32 +707,102 @@ func messageSessionOff() {
 
 func antiCheat(hostname string) {
 	// Проверяем наличие файла EasyAntiCheat_EOS.exe
-	filePath := `"C:\Program Files (x86)\EasyAntiCheat_EOS\EasyAntiCheat_EOS.exe"`
-	_, err := os.Stat(filePath)
-	if os.IsNotExist(err) {
+	filePath := "C:\\Program Files (x86)\\EasyAntiCheat_EOS\\EasyAntiCheat_EOS.exe"
+	if _, err := os.Stat(filePath); err == nil {
+		log.Printf("File %s exists\n", filePath)
+	} else if os.IsNotExist(err) {
+		log.Printf("Внимание! Станция %s\nОтсутствует файл %s", hostname, "EasyAntiCheat_EOS.exe")
 		message := fmt.Sprintf("Внимание! Станция %s\nОтсутствует файл %s", hostname, "EasyAntiCheat_EOS.exe")
 		err := SendMessage(BotToken, Chat_IDint, message)
 		if err != nil {
 			log.Fatal("Ошибка отправки сообщения: ", err, getLine())
 		}
-	} else if err != nil {
-		log.Fatalf("Ошибка при проверке наличия файла: %v\n", err)
 	} else {
-		log.Printf("Файл %s существует\n", filePath)
+		fmt.Printf("Error checking file %s: %s\n", filePath, err)
 	}
 
 	// Проверяем наличие файла EasyAntiCheat.exe
-	filePath1 := `"C:\Program Files (x86)\EasyAntiCheat_EOS\EasyAntiCheat.exe"`
-	_, err = os.Stat(filePath1)
-	if os.IsNotExist(err) {
+	filePath1 := "C:\\Program Files (x86)\\EasyAntiCheat\\EasyAntiCheat.exe"
+	if _, err := os.Stat(filePath1); err == nil {
+		log.Printf("File %s exists\n", filePath1)
+	} else if os.IsNotExist(err) {
+		log.Printf("Внимание! Станция %s\nОтсутствует файл %s", hostname, "EasyAntiCheat.exe")
 		message := fmt.Sprintf("Внимание! Станция %s\nОтсутствует файл %s", hostname, "EasyAntiCheat.exe")
 		err := SendMessage(BotToken, Chat_IDint, message)
 		if err != nil {
 			log.Fatal("Ошибка отправки сообщения: ", err, getLine())
 		}
-	} else if err != nil {
-		log.Fatalf("Ошибка при проверке наличия файла: %v. %s\n", err, getLine())
 	} else {
-		log.Printf("Файл %s существует\n", filePath1)
+		fmt.Printf("Error checking file %s: %s\n", filePath, err)
+	}
+}
+
+// trial
+func createOrUpdateKeyValue(key string, value int) {
+	data := readDataFromFile()
+
+	// Проверяем, существует ли уже ключ в файле
+	index := -1
+	for i, line := range data {
+		if strings.HasPrefix(line, key+"=") {
+			index = i
+			break
+		}
+	}
+
+	// Если ключ существует, увеличиваем его значение. Иначе, добавляем новую запись.
+	newValue := value
+	if index != -1 {
+		oldValue, _ := strconv.Atoi(strings.Split(data[index], "=")[1])
+		newValue = oldValue + value
+		data[index] = key + "=" + strconv.Itoa(newValue)
+	} else {
+		data = append(data, key+"="+strconv.Itoa(newValue))
+	}
+
+	writeDataToFile(data)
+}
+
+// func getValueByKey(key string) int {
+// 	data := readDataFromFile()
+
+// 	for _, line := range data {
+// 		parts := strings.Split(line, "=")
+// 		if parts[0] == key {
+// 			value, _ := strconv.Atoi(parts[1])
+// 			return value
+// 		}
+// 	}
+
+// 	return -1 // Возвращаем -1, если ключ не найден
+// }
+
+func readDataFromFile() []string {
+	file, err := os.Open(trialfile)
+	if err != nil {
+		return []string{}
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	return lines
+}
+
+func writeDataToFile(data []string) {
+	file, err := os.OpenFile(trialfile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	for _, line := range data {
+		if _, err := file.WriteString(line + "\n"); err != nil {
+			panic(err)
+		}
 	}
 }
