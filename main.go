@@ -208,8 +208,7 @@ func main() {
 			time.Sleep(5 * time.Second)                // интервал проверки запущенного процесса
 			isRunning = checkIfProcessRunning(appName) // запущено ли приложение
 			if isRunning {
-
-				chatMessage := sessionInfo("Start", 0)
+				chatMessage := sessionInfo("Start")
 				err := SendMessage(BotToken, Chat_IDint, chatMessage)
 				if err != nil {
 					log.Fatal("Ошибка отправки сообщения: ", err, getLine())
@@ -222,12 +221,19 @@ func main() {
 		for i := 0; i != 3; {
 			isRunning = checkIfProcessRunning(appName)
 			if !isRunning {
+				// time.Sleep(5 * time.Second)
+				// chatMessage := sessionInfo("Stop")
+				// err := SendMessage(BotToken, Chat_IDint, chatMessage)
+				// if err != nil {
+				// 	log.Fatal("Ошибка отправки сообщения: ", err, getLine())
+				// }
 				go messageSessionOff()
 				i = 3
 			}
-
 			time.Sleep(5 * time.Second) // интервал проверки запущенного процесса
 		}
+		time.Sleep(30 * time.Second)
+		// rebootPC() // перезагрузка после окончания сессии
 	}
 }
 
@@ -337,7 +343,7 @@ func gameID(fileGames string) {
 	time.Sleep(1 * time.Second)
 }
 
-func sessionInfo(status string, i int) (infoString string) {
+func sessionInfo(status string) (infoString string) {
 	// Создание HTTP клиента
 	client := &http.Client{}
 
@@ -373,11 +379,9 @@ func sessionInfo(status string, i int) (infoString string) {
 	var data SessionsData                         // структура SessionsData
 	json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
 
-	comment := strings.ReplaceAll(data.Sessions[i].Abort_comment, ";", ":")
-	sessionOn, _ := dateTimeS(data.Sessions[i].Created_on)
-
 	if status == "Start" { // формируем текст для отправки
 		game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
+		sessionOn, _ := dateTimeS(data.Sessions[0].Created_on)
 		ipInfo = ""
 		if onlineIpInfo {
 			ipInfo = ipInf(data.Sessions[0].Creator_ip)
@@ -402,22 +406,34 @@ func sessionInfo(status string, i int) (infoString string) {
 			}
 
 		}
-		billing := data.Sessions[i].Billing_type
+		billing := data.Sessions[0].Billing_type
 		if billing != "" {
 			billing = " - " + data.Sessions[0].Billing_type
 		}
 		infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + ipInfo + "\n" + sessionOn + billing
-	} else if status == "Stop" { // высчитываем продолжительность сессии и формируем текст для отправки
-		game, _ := readConfig(data.Sessions[i].Product_id, fileGames)
-		_, stopTime := dateTimeS(data.Sessions[i].Finished_on)
-		_, startTime := dateTimeS(data.Sessions[i].Created_on)
-		sessionDur := " - " + dur(stopTime, startTime)
-		if comment != "" {
-			comment = "\n" + comment
-		}
-		infoString = "[-]" + hostname + " - " + game + "\n" + data.Sessions[i].Creator_ip + sessionDur + comment
-	}
 
+	} else if status == "Stop" { // высчитываем продолжительность сессии и формируем текст для отправки
+		game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
+		// time.Sleep(5 * time.Second)
+		_, stopTime := dateTimeS(data.Sessions[0].Finished_on)
+		_, startTime := dateTimeS(data.Sessions[0].Created_on)
+		sessionDur := " - " + dur(stopTime, startTime)
+		time.Sleep(30 * time.Second)
+		isRunning = checkIfProcessRunning(appName) // запущена ли уже новая сессия
+		if !isRunning {
+			comment := strings.ReplaceAll(data.Sessions[0].Abort_comment, ";", ":")
+			if comment != "" {
+				comment = "\n" + comment
+			}
+			infoString = "[-]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + sessionDur + comment
+		} else {
+			comment := strings.ReplaceAll(data.Sessions[1].Abort_comment, ";", ":")
+			if comment != "" {
+				comment = "\n" + comment
+			}
+			infoString = "[-]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + sessionDur + comment
+		}
+	}
 	return infoString
 }
 
@@ -654,20 +670,17 @@ func diskSpace(hostname string) {
 }
 
 func messageSessionOff() {
-	time.Sleep(60 * time.Second)               // задержка перед получением данных, на случай написания отзыва
-	isRunning = checkIfProcessRunning(appName) // запущена ли уже новая сессия
-	if isRunning {
-		time.Sleep(3 * time.Second)
-		chatMessage := sessionInfo("Stop", 1)
-		err := SendMessage(BotToken, Chat_IDint, chatMessage)
-		if err != nil {
-			log.Fatal("Ошибка отправки сообщения: ", err, getLine())
-		}
-	} else {
-		chatMessage := sessionInfo("Stop", 0)
-		err := SendMessage(BotToken, Chat_IDint, chatMessage)
-		if err != nil {
-			log.Fatal("Ошибка отправки сообщения: ", err, getLine())
-		}
+	chatMessage := sessionInfo("Stop")
+	err := SendMessage(BotToken, Chat_IDint, chatMessage)
+	if err != nil {
+		log.Fatal("Ошибка отправки сообщения: ", err, getLine())
 	}
 }
+
+// func rebootPC() {
+// 	cmd := exec.Command("shutdown", "/r", "/t", "0")
+// 	err := cmd.Run()
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// }
