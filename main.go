@@ -25,9 +25,10 @@ import (
 )
 
 var (
-	BotToken, fileConfig, fileGames, hostname      string
+	BotToken                                       string = "your_bot_token" // токен бота
+	Chat_IDint                                     int64  = -12345           // определяем ID чата получателя
+	fileConfig, fileGames, hostname                string
 	serverID, authToken, mmdbASN, mmdbCity, ipInfo string
-	Chat_IDint                                     int64
 	isRunning, onlineIpInfo, checkFreeSpace        bool
 )
 
@@ -35,6 +36,7 @@ const (
 	appName  = "ese.exe"                                            // Имя запускаемого файла
 	newTitle = "Drova Notifier v2"                                  // Имя окна программы
 	url      = "https://services.drova.io/session-manager/sessions" // инфо по сессиям
+
 )
 
 // для выгрузки названий игр с их ID
@@ -90,11 +92,10 @@ type Win32_OperatingSystem struct {
 }
 
 func main() {
-	// Следующие 2 строки вводим свои данные. Чат ID будет с - в начале если это общий чат, и без - если это личка
-	BotToken = "11111111:sdsdfsdde" // токен бота
-	Chat_IDint = -1002054147798     // определяем ID чата получателя
-	onlineIpInfo = false            // false - инфо по IP используя оффлайн базу GeoLite, true - инфо по IP через сайт ipinfo.io
-	checkFreeSpace = true           // проверка свободного места на дисках. true - проверка включена, false - выключена
+	// false - инфо по IP используя оффлайн базу GeoLite, true - инфо по IP через сайт ipinfo.io
+	onlineIpInfo = false
+	// проверка свободного места на дисках. true - проверка включена, false - выключена
+	checkFreeSpace = true
 
 	logFilePath := "log.log" // Имя файла для логирования ошибок
 	logFilePath = filepath.Join(filepath.Dir(os.Args[0]), logFilePath)
@@ -208,7 +209,7 @@ func main() {
 			isRunning = checkIfProcessRunning(appName) // запущено ли приложение
 			if isRunning {
 
-				chatMessage := sessionInfo("Start")
+				chatMessage := sessionInfo("Start", 0)
 				err := SendMessage(BotToken, Chat_IDint, chatMessage)
 				if err != nil {
 					log.Fatal("Ошибка отправки сообщения: ", err, getLine())
@@ -221,12 +222,7 @@ func main() {
 		for i := 0; i != 3; {
 			isRunning = checkIfProcessRunning(appName)
 			if !isRunning {
-				time.Sleep(60 * time.Second) // задержка перед получением данных, на случай написания отзыва
-				chatMessage := sessionInfo("Stop")
-				err := SendMessage(BotToken, Chat_IDint, chatMessage)
-				if err != nil {
-					log.Fatal("Ошибка отправки сообщения: ", err, getLine())
-				}
+				go messageSessionOff()
 				i = 3
 			}
 
@@ -341,7 +337,7 @@ func gameID(fileGames string) {
 	time.Sleep(1 * time.Second)
 }
 
-func sessionInfo(status string) (infoString string) {
+func sessionInfo(status string, i int) (infoString string) {
 	// Создание HTTP клиента
 	client := &http.Client{}
 
@@ -377,54 +373,52 @@ func sessionInfo(status string) (infoString string) {
 	var data SessionsData                         // структура SessionsData
 	json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
 
-	comment := strings.ReplaceAll(data.Sessions[0].Abort_comment, ";", ":")
-	sessionOn, _ := dateTimeS(data.Sessions[0].Created_on)
-	game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
-	// game = "\nИгра: " + game
-	ipInfo = ""
-	if onlineIpInfo {
-		ipInfo = ipInf(data.Sessions[0].Creator_ip)
-	} else {
-		ip := net.ParseIP(data.Sessions[0].Creator_ip)
-		cityRecord, asnRecord, err := getASNRecord(mmdbCity, mmdbASN, ip)
-		if err != nil {
-			log.Fatal(err)
-		}
+	comment := strings.ReplaceAll(data.Sessions[i].Abort_comment, ";", ":")
+	sessionOn, _ := dateTimeS(data.Sessions[i].Created_on)
 
-		asn := asnRecord.AutonomousSystemOrganization // провайдер клиента
-		city := cityRecord.City.Names["ru"]           // город клиента
-		region := cityRecord.Subdivision[0].Names["ru"]
-		if city != "" {
-			ipInfo = "\nГород: " + city
-		}
-		if region != "" {
-			ipInfo += "\nРегион: " + region
-		}
-		if asn != "" {
-			ipInfo += "\nПровайдер: " + asn
-		}
-
-	}
 	if status == "Start" { // формируем текст для отправки
+		game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
+		ipInfo = ""
+		if onlineIpInfo {
+			ipInfo = ipInf(data.Sessions[0].Creator_ip)
+		} else {
+			ip := net.ParseIP(data.Sessions[0].Creator_ip)
+			cityRecord, asnRecord, err := getASNRecord(mmdbCity, mmdbASN, ip)
+			if err != nil {
+				log.Fatal(err)
+			}
 
-		billing := data.Sessions[0].Billing_type
+			asn := asnRecord.AutonomousSystemOrganization // провайдер клиента
+			city := cityRecord.City.Names["ru"]           // город клиента
+			region := cityRecord.Subdivision[0].Names["ru"]
+			if city != "" {
+				ipInfo = " - " + city
+			}
+			if region != "" {
+				ipInfo += " - " + region
+			}
+			if asn != "" {
+				ipInfo += " - " + asn
+			}
+
+		}
+		billing := data.Sessions[i].Billing_type
 		if billing != "" {
-			billing = "\nОплата: " + data.Sessions[0].Billing_type
+			billing = " - " + data.Sessions[0].Billing_type
 		}
-		infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + "\n" + sessionOn + ipInfo + billing
-		fmt.Println()
-		return
-	} else { // высчитываем продолжительность сессии и формируем текст для отправки
-		_, stopTime := dateTimeS(data.Sessions[0].Finished_on)
-		_, startTime := dateTimeS(data.Sessions[0].Created_on)
-		sessionDur := "\nПродолжительность сессии: " + dur(stopTime, startTime)
+		infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + ipInfo + "\n" + sessionOn + billing
+	} else if status == "Stop" { // высчитываем продолжительность сессии и формируем текст для отправки
+		game, _ := readConfig(data.Sessions[i].Product_id, fileGames)
+		_, stopTime := dateTimeS(data.Sessions[i].Finished_on)
+		_, startTime := dateTimeS(data.Sessions[i].Created_on)
+		sessionDur := " - " + dur(stopTime, startTime)
 		if comment != "" {
-			comment = "\nКомментарий: " + comment
+			comment = "\n" + comment
 		}
-		infoString = "[-]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + sessionDur + comment
-		fmt.Println()
-		return
+		infoString = "[-]" + hostname + " - " + game + "\n" + data.Sessions[i].Creator_ip + sessionDur + comment
 	}
+
+	return infoString
 }
 
 // конвертирование даты и времени
@@ -442,28 +436,32 @@ func dateTimeS(data int64) (string, time.Time) {
 }
 
 func dur(stopTime, startTime time.Time) (sessionDur string) {
-	duration := stopTime.Sub(startTime).Round(time.Second)
-	hours := int(duration.Hours())
-	minutes := int(duration.Minutes()) % 60
-	seconds := int(duration.Seconds()) % 60
-	hou := strconv.Itoa(hours)
-	sessionDur = ""
-	if hours < 2 {
-		sessionDur = sessionDur + "0" + hou + ":"
+	if stopTime.String() != "" {
+		duration := stopTime.Sub(startTime).Round(time.Second)
+		hours := int(duration.Hours())
+		minutes := int(duration.Minutes()) % 60
+		seconds := int(duration.Seconds()) % 60
+		hou := strconv.Itoa(hours)
+		sessionDur = ""
+		if hours < 2 {
+			sessionDur = sessionDur + "0" + hou + ":"
+		} else {
+			sessionDur = sessionDur + hou + ":"
+		}
+		min := strconv.Itoa(minutes)
+		if minutes < 10 {
+			sessionDur = sessionDur + "0" + min + ":"
+		} else {
+			sessionDur = sessionDur + min + ":"
+		}
+		sec := strconv.Itoa(seconds)
+		if seconds < 10 {
+			sessionDur = sessionDur + "0" + sec
+		} else {
+			sessionDur = sessionDur + sec
+		}
 	} else {
-		sessionDur = sessionDur + hou + ":"
-	}
-	min := strconv.Itoa(minutes)
-	if minutes < 10 {
-		sessionDur = sessionDur + "0" + min + ":"
-	} else {
-		sessionDur = sessionDur + min + ":"
-	}
-	sec := strconv.Itoa(seconds)
-	if seconds < 10 {
-		sessionDur = sessionDur + "0" + sec
-	} else {
-		sessionDur = sessionDur + sec
+		sessionDur = "Ошибка получения времени окончания сессии"
 	}
 	return
 }
@@ -649,6 +647,25 @@ func diskSpace(hostname string) {
 	if text != "" {
 		message := fmt.Sprintf("Внимание! Станция %s\n%s", hostname, text)
 		err := SendMessage(BotToken, Chat_IDint, message)
+		if err != nil {
+			log.Fatal("Ошибка отправки сообщения: ", err, getLine())
+		}
+	}
+}
+
+func messageSessionOff() {
+	time.Sleep(60 * time.Second)               // задержка перед получением данных, на случай написания отзыва
+	isRunning = checkIfProcessRunning(appName) // запущена ли уже новая сессия
+	if isRunning {
+		time.Sleep(3 * time.Second)
+		chatMessage := sessionInfo("Stop", 1)
+		err := SendMessage(BotToken, Chat_IDint, chatMessage)
+		if err != nil {
+			log.Fatal("Ошибка отправки сообщения: ", err, getLine())
+		}
+	} else {
+		chatMessage := sessionInfo("Stop", 0)
+		err := SendMessage(BotToken, Chat_IDint, chatMessage)
 		if err != nil {
 			log.Fatal("Ошибка отправки сообщения: ", err, getLine())
 		}
