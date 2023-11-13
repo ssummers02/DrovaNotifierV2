@@ -37,7 +37,6 @@ const (
 	appName  = "ese.exe"                                            // Имя запускаемого файла
 	newTitle = "Drova Notifier v2"                                  // Имя окна программы
 	url      = "https://services.drova.io/session-manager/sessions" // инфо по сессиям
-
 )
 
 // для выгрузки названий игр с их ID
@@ -354,6 +353,8 @@ func gameID(fileGames string) {
 }
 
 func sessionInfo(status string) (infoString string) {
+	var sumTrial int
+	var billingTrial string
 	// Создание HTTP клиента
 	client := &http.Client{}
 
@@ -414,13 +415,19 @@ func sessionInfo(status string) (infoString string) {
 			if asn != "" {
 				ipInfo += " - " + asn
 			}
-
 		}
 		billing := data.Sessions[0].Billing_type
+		billingTrial = ""
+		if billing == "trial" {
+			sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
+			if sumTrial > 0 {
+				billingTrial = fmt.Sprintf("\nТриал = %d", sumTrial)
+			}
+		}
 		if billing != "" {
 			billing = " - " + data.Sessions[0].Billing_type
 		}
-		infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + ipInfo + "\n" + sessionOn + billing
+		infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + ipInfo + "\n" + sessionOn + billing + billingTrial
 
 	} else if status == "Stop" { // высчитываем продолжительность сессии и формируем текст для отправки
 		game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
@@ -763,19 +770,19 @@ func createOrUpdateKeyValue(key string, value int) {
 	writeDataToFile(data)
 }
 
-// func getValueByKey(key string) int {
-// 	data := readDataFromFile()
+func getValueByKey(key string) int {
+	data := readDataFromFile()
 
-// 	for _, line := range data {
-// 		parts := strings.Split(line, "=")
-// 		if parts[0] == key {
-// 			value, _ := strconv.Atoi(parts[1])
-// 			return value
-// 		}
-// 	}
+	for _, line := range data {
+		parts := strings.Split(line, "=")
+		if parts[0] == key {
+			value, _ := strconv.Atoi(parts[1])
+			return value
+		}
+	}
 
-// 	return -1 // Возвращаем -1, если ключ не найден
-// }
+	return -1 // Возвращаем -1, если ключ не найден
+}
 
 func readDataFromFile() []string {
 	file, err := os.Open(trialfile)
