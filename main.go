@@ -92,8 +92,10 @@ type Win32_OperatingSystem struct {
 }
 
 func main() {
-	BotToken = "enter_your_bot_toket" // токен бота
-	Chat_IDint = -1234                // определяем ID чата получателя
+	// если вписали значения в следующие 2 строки, не забываем их раскоментить(убрать // в начале строки)
+	
+	// BotToken = "enter_your_bot_toket" // токен бота
+	// Chat_IDint = -1234                // определяем ID чата получателя
 
 	// false - инфо по IP используя оффлайн базу GeoLite, true - инфо по IP через сайт ipinfo.io
 	onlineIpInfo = false
