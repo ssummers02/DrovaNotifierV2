@@ -419,7 +419,7 @@ func sessionInfo(status string) (infoString string) {
 			if sumTrial <= 20 {
 				ipTrial := data.Sessions[0].Creator_ip
 				handshake := data.Sessions[0].Abort_comment
-				if !strings.Contains(handshake, "stop during handshake") { // если кнопка "Играть тут" активированна, добавляем время в файл
+				if !strings.Contains(handshake, "handshake") { // если кнопка "Играть тут" активированна, добавляем время в файл
 					createOrUpdateKeyValue(ipTrial, minute)
 				}
 				sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
