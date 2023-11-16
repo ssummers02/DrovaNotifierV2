@@ -102,7 +102,7 @@ func main() {
 	// проверка наличия файлов EasyAntiCheat.exe и EasyAntiCheat_EOS.exe
 	checkAntiCheat = true
 	// Для отключение блокировки "хитрых" триальщиков меняем значение на false
-	trialBlock = true
+	trialBlock = false
 
 	logFilePath := "log.log" // Имя файла для логирования ошибок
 	logFilePath = filepath.Join(filepath.Dir(os.Args[0]), logFilePath)
