@@ -93,9 +93,10 @@ type Win32_OperatingSystem struct {
 
 func main() {
 	// если вписали значения в следующие 2 строки, не забываем их раскоментить(убрать // в начале строки)
-	
+
 	// BotToken = "enter_your_bot_toket" // токен бота
 	// Chat_IDint = -1234                // определяем ID чата получателя
+	BotToken, Chat_IDint, trialBlock = getConfig()
 
 	// false - инфо по IP используя оффлайн базу GeoLite, true - инфо по IP через сайт ipinfo.io
 	onlineIpInfo = false
@@ -103,8 +104,6 @@ func main() {
 	checkFreeSpace = true
 	// проверка наличия файлов EasyAntiCheat.exe и EasyAntiCheat_EOS.exe
 	checkAntiCheat = true
-	// Для отключение блокировки "хитрых" триальщиков меняем значение на false
-	trialBlock = false
 
 	logFilePath := "log.log" // Имя файла для логирования ошибок
 	logFilePath = filepath.Join(filepath.Dir(os.Args[0]), logFilePath)
@@ -181,7 +180,7 @@ func main() {
 		} else {
 			log.Println(mmdbASN)
 			log.Println(mmdbCity)
-			go updateRestart(mmdbASN, mmdbCity)
+			go updateGeoLite(mmdbASN, mmdbCity)
 		}
 	}
 
@@ -232,7 +231,7 @@ func main() {
 			}
 			time.Sleep(5 * time.Second) // интервал проверки запущенного процесса
 		}
-		time.Sleep(30 * time.Second)
+		// time.Sleep(30 * time.Second)
 		// rebootPC() // перезагрузка после окончания сессии
 	}
 }
@@ -382,10 +381,10 @@ func sessionInfo(status string) (infoString string) {
 			if sumTrial == -1 { // нет записей по этому IP
 				createOrUpdateKeyValue(data.Sessions[0].Creator_ip, 0)
 				billing = " - " + data.Sessions[0].Billing_type
-			} else if sumTrial > 0 && sumTrial < 21 { // уже подключался, но не играл в общей сложности 21 минуту
+			} else if sumTrial > 0 && sumTrial < 20 { // уже подключался, но не играл в общей сложности 21 минуту
 				billing = fmt.Sprintf(" - TRIAL %dмин", sumTrial)
-			} else if sumTrial > 21 { // начал злоупотреблять
-				billing = fmt.Sprintf(" - TRIAL %dмин", sumTrial)
+			} else if sumTrial >= 20 { // начал злоупотреблять
+				billing = fmt.Sprintf(" - TRIAL %dмин\nЗлоупотребление Триалом!", sumTrial)
 
 				if trialBlock {
 					text := "Злоупотребление Триалом! Кикаем!"
@@ -395,8 +394,12 @@ func sessionInfo(status string) (infoString string) {
 						log.Println("Ошибка отправки сообщения: ", err, getLine())
 					}
 					log.Printf("Заблокировано соединение: %s. Trial %d", data.Sessions[0].Creator_ip, sumTrial)
-					time.Sleep(5 * time.Second)
-					blockESE()
+					time.Sleep(10 * time.Second)
+					err = runCommand("taskkill", "/IM", "ese.exe", "/F")
+					if err != nil {
+						fmt.Println("Ошибка выполнения команды:", err)
+						return
+					}
 				}
 			}
 		}
@@ -418,16 +421,16 @@ func sessionInfo(status string) (infoString string) {
 		billingTrial = ""
 		if billing == "trial" {
 			sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
-			if sumTrial <= 20 {
+			if sumTrial < 20 || !trialBlock {
 				ipTrial := data.Sessions[0].Creator_ip
 				handshake := data.Sessions[0].Abort_comment
 				if !strings.Contains(handshake, "handshake") { // если кнопка "Играть тут" активированна, добавляем время в файл
 					createOrUpdateKeyValue(ipTrial, minute)
 				}
 				sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
-				billingTrial = fmt.Sprintf("\nTRIAL %dмин", sumTrial)
-			} else if sumTrial > 20 {
-				billingTrial = fmt.Sprintf("\nKICK - TRIAL %dмин", sumTrial)
+				billingTrial = fmt.Sprintf("\nTrial %dмин", sumTrial)
+			} else if sumTrial > 20 && trialBlock {
+				billingTrial = fmt.Sprintf("\nKICK - Trial %dмин", sumTrial)
 				sessionDur = ""
 			}
 		}
@@ -559,7 +562,7 @@ func ipInf(ip string) string {
 	return text
 }
 
-func updateRestart(mmdbASN, mmdbCity string) {
+func updateGeoLite(mmdbASN, mmdbCity string) {
 	var previousModTime1, previousModTime2 time.Time
 	filePath1 := mmdbASN
 	filePath2 := mmdbCity
@@ -577,7 +580,6 @@ func updateRestart(mmdbASN, mmdbCity string) {
 	previousModTime1 = fileInfo1.ModTime()
 	previousModTime2 = fileInfo2.ModTime()
 	for {
-		time.Sleep(60 * time.Second)        // Интервал повторной проверки
 		fileInfo1, err = os.Stat(filePath1) // Повторно получаем информацию о файле
 		if err != nil {
 			log.Println(err)
@@ -591,6 +593,17 @@ func updateRestart(mmdbASN, mmdbCity string) {
 			log.Println("Файл был изменен. Перезапуск приложения...")
 			restart()
 		}
+		// err := runCommand("get.exe", "-N", "-q", "https://git.io/GeoLite2-ASN.mmdb")
+		// if err != nil {
+		// 	log.Println("Ошибка выполнения команды:", err)
+		// 	return
+		// }
+		// err = runCommand("get.exe", "-N", "-q", "https://git.io/GeoLite2-City.mmdb")
+		// if err != nil {
+		// 	log.Println("Ошибка выполнения команды:", err)
+		// 	return
+		// }
+		time.Sleep(5 * time.Minute) // Интервал повторной проверки
 	}
 }
 
@@ -775,14 +788,14 @@ func writeDataToFile(data []string) {
 }
 
 // отключение триальщика
-func blockESE() {
-	cmd := exec.Command("taskkill", "/IM", "ese.exe", "/F")
-	err := cmd.Run()
-	if err != nil {
-		log.Println("Failed to close the application:", err)
-		return
-	}
-}
+// func blockESE() {
+// 	cmd := exec.Command("taskkill", "/IM", "ese.exe", "/F")
+// 	err := cmd.Run()
+// 	if err != nil {
+// 		log.Println("Failed to close the application:", err)
+// 		return
+// 	}
+// }
 
 // получаем данные из файла в виде ключ = значение
 func readConfig(keys, filename string) (string, error) {
@@ -830,6 +843,15 @@ func takeBoolean(key string) (value bool) {
 
 	}
 	return
+}
+
+func runCommand(command string, args ...string) error {
+	cmd := exec.Command(command, args...)
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // перезагрузка ПК
