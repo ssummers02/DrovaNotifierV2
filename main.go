@@ -25,18 +25,16 @@ import (
 )
 
 var (
-	BotToken                                          string // токен бота
-	Chat_IDint                                        int64  // определяем ID чата получателя
 	fileConfig, fileGames, hostname, ipInfo           string
 	serverID, authToken, mmdbASN, mmdbCity, trialfile string
-	isRunning, onlineIpInfo                           bool
-	checkFreeSpace, checkAntiCheat, trialBlock        bool
+	isRunning                                         bool
 )
 
 const (
-	appName  = "ese.exe"                                            // Имя запускаемого файла
-	newTitle = "Drova Notifier v2"                                  // Имя окна программы
-	url      = "https://services.drova.io/session-manager/sessions" // инфо по сессиям
+	appName     = "ese.exe"                                            // Имя запускаемого файла
+	newTitle    = "Drova Notifier v2"                                  // Имя окна программы
+	UrlSessions = "https://services.drova.io/session-manager/sessions" // инфо по сессиям
+	UrlServers  = "https://services.drova.io/server-manager/servers"   // для получения инфо по серверам
 )
 
 // для выгрузки названий игр с их ID
@@ -45,23 +43,8 @@ type Product struct {
 	Title     string `json:"title"`
 }
 
-// структура для выгрузки информации по сессиям
-type SessionsData struct {
-	Sessions []struct {
-		Client_id     string `json:"client_id"`
-		Product_id    string `json:"product_id"`
-		Created_on    int64  `json:"created_on"`
-		Finished_on   int64  `json:"finished_on"` //or null
-		Status        string `json:"status"`
-		Creator_ip    string `json:"creator_ip"`
-		Abort_comment string `json:"abort_comment"` //or null
-		Billing_type  string `json:"billing_type"`  // or null
-	}
-}
-
 // для получения провайдера в оффлайн базе
 type ASNRecord struct {
-	// AutonomousSystemNumber       uint32 `maxminddb:"autonomous_system_number"`
 	AutonomousSystemOrganization string `maxminddb:"autonomous_system_organization"`
 }
 
@@ -70,9 +53,6 @@ type CityRecord struct {
 	City struct {
 		Names map[string]string `maxminddb:"names"`
 	} `maxminddb:"city"`
-	// Country struct {
-	// 	Names map[string]string `maxminddb:"names"`
-	// } `maxminddb:"country"`
 	Subdivision []struct {
 		Names map[string]string `maxminddb:"names"`
 	} `maxminddb:"subdivisions"`
@@ -86,24 +66,23 @@ type IPInfoResponse struct {
 	ISP    string `json:"org"`
 }
 
+// структура для выгрузки ID и названия серверов
+type serverManager []struct {
+	Server_id    string `json:"uuid"`
+	Name         string `json:"name"`
+	User_id      string `json:"user_id"`
+	Status       string `json:"state"`
+	SessionStart int64  `json:"alive_since"`
+}
+
 // для получения времени запуска windows
 type Win32_OperatingSystem struct {
 	LastBootUpTime time.Time
 }
 
 func main() {
-	// если вписали значения в следующие 2 строки, не забываем их раскоментить(убрать // в начале строки)
-
-	// BotToken = "enter_your_bot_toket" // токен бота
-	// Chat_IDint = -1234                // определяем ID чата получателя
-	BotToken, Chat_IDint, trialBlock = getConfig()
-
-	// false - инфо по IP используя оффлайн базу GeoLite, true - инфо по IP через сайт ipinfo.io
-	onlineIpInfo = false
-	// проверка свободного места на дисках. true - проверка включена, false - выключена
-	checkFreeSpace = true
-	// проверка наличия файлов EasyAntiCheat.exe и EasyAntiCheat_EOS.exe
-	checkAntiCheat = true
+	BotToken, Chat_IDint, UserID, trialBlock, commandON = getConfigBot()
+	onlineIpInfo, checkFreeSpace, checkAntiCheat = getConfig()
 
 	logFilePath := "log.log" // Имя файла для логирования ошибок
 	logFilePath = filepath.Join(filepath.Dir(os.Args[0]), logFilePath)
@@ -130,7 +109,7 @@ func main() {
 	// Получаем имя ПК
 	hostname, err = os.Hostname()
 	if err != nil {
-		log.Println("Ошибка при получении имени компьютера: ", err, "\nOшибка в строке", getLine())
+		log.Println("Ошибка при получении имени компьютера: ", err, getLine())
 		return
 	}
 
@@ -138,7 +117,7 @@ func main() {
 	_, err = os.Stat(fileConfig)
 	if os.IsNotExist(err) {
 		// Файл не существует
-		log.Printf("Файл %s не существует. %s. %s\n", fileConfig, err, getLine())
+		log.Printf("Файл %s не существует. %s\n", fileConfig, err)
 	} else {
 		bToken, err := readConfig("tokenbot", fileConfig) // определяем токен бота
 		if err != nil {
@@ -157,15 +136,26 @@ func main() {
 				log.Println("Error: ", err, getLine())
 			}
 		}
+		UsrID, err := readConfig("UserID", fileConfig) // определяем ID пользователя
+		if err != nil {
+			log.Printf("Ошибка - %s. %s\n", err, getLine())
+		}
+		if UsrID != "" {
+			UserID, err = strconv.ParseInt(UsrID, 10, 64) // конвертируем ID чата в int64
+			if err != nil {
+				log.Println("Error: ", err, getLine())
+			}
+		}
 
 		onlineIpInfo = takeBoolean("onlineIpInfo")     // настройки получения инфо по IP
 		checkFreeSpace = takeBoolean("checkFreeSpace") // проверка свободного места на дисках
 		checkAntiCheat = takeBoolean("checkAntiCheat") // проверка папок античитов
 		trialBlock = takeBoolean("trialBlock")         // блокировка триальщиков
+		commandON = takeBoolean("commandON")
 	}
 
-	mmdbASN = filepath.Join(dir, "GeoLite2-ASN.mmdb")
-	mmdbCity = filepath.Join(dir, "GeoLite2-City.mmdb")
+	mmdbASN = filepath.Join(dir, "GeoLite2-ASN.mmdb")   // файл оффлайн базы IP. Провайдер
+	mmdbCity = filepath.Join(dir, "GeoLite2-City.mmdb") // файл оффлайн базы IP. Город и область
 	_, err = os.Stat(mmdbASN)
 	if os.IsNotExist(err) {
 		// Файл не существует
@@ -194,15 +184,12 @@ func main() {
 	regFolder += `\servers\` + serverID
 	authToken = regGet(regFolder, "auth_token") // получаем токен для авторизации
 
-	messageStartWin(hostname) // проверка времени запуска станции
-	if checkFreeSpace {
-		diskSpace(hostname) // проверка свободного места на дисках
+	antiCheat(hostname, checkAntiCheat) // проверка античитов
+	diskSpace(hostname, checkFreeSpace) // проверка свободного места на дисках
+	messageStartWin(hostname)           // проверка времени запуска станции
+	if commandON {
+		go commandBot(BotToken, hostname, UserID)
 	}
-
-	if checkAntiCheat {
-		antiCheat(hostname)
-	}
-
 	for {
 		for i := 0; i != 2; { //ждем запуска приложения ese.exe
 			time.Sleep(5 * time.Second)                // интервал проверки запущенного процесса
@@ -221,18 +208,19 @@ func main() {
 		for i := 0; i != 3; {
 			isRunning = checkIfProcessRunning(appName)
 			if !isRunning {
-				// go messageSessionOff()
 				chatMessage := sessionInfo("Stop")
 				err := SendMessage(BotToken, Chat_IDint, chatMessage)
 				if err != nil {
 					log.Println("Ошибка отправки сообщения: ", err, getLine())
 				}
+
+				antiCheat(hostname, checkAntiCheat) // проверка античитов
+				diskSpace(hostname, checkFreeSpace) // проверка свободного места на дисках
+
 				i = 3
 			}
 			time.Sleep(5 * time.Second) // интервал проверки запущенного процесса
 		}
-		// time.Sleep(30 * time.Second)
-		// rebootPC() // перезагрузка после окончания сессии
 	}
 }
 
@@ -243,23 +231,31 @@ func checkIfProcessRunning(processName string) bool {
 	if err != nil {
 		log.Fatal("Ошибка получения списка процессов:", err, getLine())
 	}
-
 	return strings.Contains(string(output), processName)
 }
 
+// отправка сообщения ботом
 func SendMessage(botToken string, chatID int64, text string) error {
+	var i int = 0
+	var err error
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
 		log.Println("Ошибка подключения бота: ", err, getLine())
 		return err
 	}
+	bot.Debug = true
 
+	i = 0
 	message := tgbotapi.NewMessage(chatID, text)
-
-	_, err = bot.Send(message)
-	if err != nil {
-		log.Println("Ошибка отправки сообщения: ", err, getLine())
-		return err
+	for i = 0; i < 3; i++ {
+		_, err = bot.Send(message)
+		if err != nil {
+			log.Println("Ошибка отправки сообщения: ", err, getLine())
+			time.Sleep(1 * time.Second)
+			return err
+		} else if err == nil {
+			i = 3
+		}
 	}
 
 	return nil
@@ -272,6 +268,7 @@ func getLine() string {
 	return lineErr
 }
 
+// получение списка игр с их ID
 func gameID(fileGames string) {
 	// Отправить GET-запрос на API
 	resp, err := http.Get("https://services.drova.io/product-manager/product/listfull2")
@@ -308,142 +305,7 @@ func gameID(fileGames string) {
 	time.Sleep(1 * time.Second)
 }
 
-func sessionInfo(status string) (infoString string) {
-	var sumTrial int
-	var billingTrial string
-	// Создание HTTP клиента
-	client := &http.Client{}
-
-	// Создание нового GET-запроса
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		log.Println("Failed to create request: ", err, getLine())
-	}
-
-	// Установка параметров запроса
-	q := req.URL.Query()
-	q.Add("server_id", serverID)
-	req.URL.RawQuery = q.Encode()
-
-	// Установка заголовка X-Auth-Token
-	req.Header.Set("X-Auth-Token", authToken)
-
-	// Отправка запроса и получение ответа
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Fatal("Failed to send request: ", err, getLine())
-	}
-	defer resp.Body.Close()
-
-	// Запись ответа в строку
-	var buf bytes.Buffer
-	_, err = io.Copy(&buf, resp.Body)
-	if err != nil {
-		log.Fatal("Failed to write response to buffer: ", err, getLine())
-	}
-
-	responseString := buf.String()
-	var data SessionsData                         // структура SessionsData
-	json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
-
-	if status == "Start" { // формируем текст для отправки
-		game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
-		sessionOn, _ := dateTimeS(data.Sessions[0].Created_on)
-		ipInfo = ""
-		if onlineIpInfo {
-			ipInfo = ipInf(data.Sessions[0].Creator_ip)
-		} else {
-			ip := net.ParseIP(data.Sessions[0].Creator_ip)
-			cityRecord, asnRecord, err := getASNRecord(mmdbCity, mmdbASN, ip)
-			if err != nil {
-				log.Println(err)
-			}
-			asn := asnRecord.AutonomousSystemOrganization // провайдер клиента
-			city := cityRecord.City.Names["ru"]           // город клиента
-			region := cityRecord.Subdivision[0].Names["ru"]
-			if city != "" {
-				ipInfo = " - " + city
-			}
-			if region != "" {
-				ipInfo += " - " + region
-			}
-			if asn != "" {
-				ipInfo += " - " + asn
-			}
-		}
-		var billing string
-		billing = data.Sessions[0].Billing_type
-		if billing != "" && billing != "trial" {
-			billing = " - " + data.Sessions[0].Billing_type
-		}
-		if billing == "trial" {
-			sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
-			if sumTrial == -1 { // нет записей по этому IP
-				createOrUpdateKeyValue(data.Sessions[0].Creator_ip, 0)
-				billing = " - " + data.Sessions[0].Billing_type
-			} else if sumTrial > 0 && sumTrial < 20 { // уже подключался, но не играл в общей сложности 21 минуту
-				billing = fmt.Sprintf(" - TRIAL %dмин", sumTrial)
-			} else if sumTrial >= 20 { // начал злоупотреблять
-				billing = fmt.Sprintf(" - TRIAL %dмин\nЗлоупотребление Триалом!", sumTrial)
-
-				if trialBlock {
-					text := "Злоупотребление Триалом! Кикаем!"
-					message := fmt.Sprintf("Внимание! Станция %s.\n%s", hostname, text)
-					err := SendMessage(BotToken, Chat_IDint, message)
-					if err != nil {
-						log.Println("Ошибка отправки сообщения: ", err, getLine())
-					}
-					log.Printf("Заблокировано соединение: %s. Trial %d", data.Sessions[0].Creator_ip, sumTrial)
-					time.Sleep(10 * time.Second)
-					err = runCommand("taskkill", "/IM", "ese.exe", "/F")
-					if err != nil {
-						fmt.Println("Ошибка выполнения команды:", err)
-						return
-					}
-				}
-			}
-		}
-
-		infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + ipInfo + "\n" + sessionOn + billing
-
-	} else if status == "Stop" { // высчитываем продолжительность сессии и формируем текст для отправки
-		var minute int
-		var duration, sessionDur string
-		game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
-
-		_, stopTime := dateTimeS(data.Sessions[0].Finished_on)
-		_, startTime := dateTimeS(data.Sessions[0].Created_on)
-		if data.Sessions[0].Created_on < data.Sessions[0].Finished_on {
-			duration, minute = dur(stopTime, startTime)
-			sessionDur = " - " + duration
-		}
-		billing := data.Sessions[0].Billing_type
-		billingTrial = ""
-		if billing == "trial" {
-			sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
-			if sumTrial < 20 || !trialBlock {
-				ipTrial := data.Sessions[0].Creator_ip
-				handshake := data.Sessions[0].Abort_comment
-				if !strings.Contains(handshake, "handshake") { // если кнопка "Играть тут" активированна, добавляем время в файл
-					createOrUpdateKeyValue(ipTrial, minute)
-				}
-				sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
-				billingTrial = fmt.Sprintf("\nTrial %dмин", sumTrial)
-			} else if sumTrial > 20 && trialBlock {
-				billingTrial = fmt.Sprintf("\nKICK - Trial %dмин", sumTrial)
-				sessionDur = ""
-			}
-		}
-		var comment string
-		if data.Sessions[0].Abort_comment != "" {
-			comment = "\n" + data.Sessions[0].Abort_comment
-		}
-		infoString = "[-]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + sessionDur + comment + billingTrial
-	}
-	return infoString
-}
-
-// конвертирование даты и времени
+// конвертирование дат
 func dateTimeS(data int64) (string, time.Time) {
 
 	// Создание объекта времени
@@ -457,6 +319,7 @@ func dateTimeS(data int64) (string, time.Time) {
 	return formattedTime, t
 }
 
+// высчитываем продолжительность сессии
 func dur(stopTime, startTime time.Time) (string, int) {
 	var minutes int
 	var sessionDur string
@@ -492,18 +355,16 @@ func dur(stopTime, startTime time.Time) (string, int) {
 
 // получаем данные из реестра
 func regGet(regFolder, keys string) string {
-
 	key, err := registry.OpenKey(registry.LOCAL_MACHINE, regFolder, registry.QUERY_VALUE)
 	if err != nil {
-		log.Printf("Failed to open registry key: %v\n", err)
+		log.Printf("Failed to open registry key: %v. %s\n", err, getLine())
 	}
 	defer key.Close()
 
 	value, _, err := key.GetStringValue(keys)
 	if err != nil {
-		log.Printf("Failed to read last_server value: %v\n", err)
+		log.Printf("Failed to read last_server value: %v. %s\n", err, getLine())
 	}
-	// log.Printf("%s - %s: %s\n", keys, regFolder, value)
 
 	return value
 }
@@ -545,73 +406,57 @@ func getASNRecord(mmdbCity, mmdbASN string, ip net.IP) (*CityRecord, *ASNRecord,
 // инфо по IP - ipinfo.io
 func ipInf(ip string) string {
 	apiURL := fmt.Sprintf("https://ipinfo.io/%s/json", ip)
-
 	resp, err := http.Get(apiURL)
 	if err != nil {
-		log.Println(err)
+		log.Println(err, getLine())
 	}
 	defer resp.Body.Close()
 
 	var ipInfo IPInfoResponse
 	err = json.NewDecoder(resp.Body).Decode(&ipInfo)
 	if err != nil {
-		log.Println(err)
+		log.Println(err, getLine())
 	}
 
 	text := "\nГород: " + ipInfo.City + "\nРегион: " + ipInfo.Region + "\nПровайдер: " + ipInfo.ISP
 	return text
 }
 
+// слежение за изменением файлов базы IP
 func updateGeoLite(mmdbASN, mmdbCity string) {
-	var previousModTime1, previousModTime2 time.Time
-	filePath1 := mmdbASN
-	filePath2 := mmdbCity
-	// Получаем информацию о файлах
-	fileInfo1, err := os.Stat(filePath1)
-	if err != nil {
-		log.Println(err)
-	}
-	fileInfo2, err := os.Stat(filePath2)
-	if err != nil {
-		log.Println(err)
+	var geoLite = [2]string{mmdbASN, mmdbCity}
+	var previousModTime = [2]time.Time{}
+
+	for i := 0; i < len(geoLite); i++ {
+		fileInfo, err := os.Stat(geoLite[i])
+		if err != nil {
+			log.Println(err, getLine())
+		}
+		// Проверяем время последнего изменения файла
+		previousModTime[i] = fileInfo.ModTime()
 	}
 
-	// Проверяем время последнего изменения файла
-	previousModTime1 = fileInfo1.ModTime()
-	previousModTime2 = fileInfo2.ModTime()
 	for {
-		fileInfo1, err = os.Stat(filePath1) // Повторно получаем информацию о файле
-		if err != nil {
-			log.Println(err)
+		for i := 0; i < len(geoLite); i++ {
+			fileInfo, err := os.Stat(geoLite[i])
+			if err != nil {
+				log.Println(err, getLine())
+			}
+			if previousModTime[i] != fileInfo.ModTime() {
+				log.Println("Файл был изменен. Перезапуск приложения...")
+				restart()
+			}
 		}
-		fileInfo2, err = os.Stat(filePath2)
-		if err != nil {
-			log.Println(err)
-		}
-		// Проверяем, изменился ли файл по сравнению с предыдущим временем модификации
-		if previousModTime1 != fileInfo1.ModTime() || previousModTime2 != fileInfo2.ModTime() {
-			log.Println("Файл был изменен. Перезапуск приложения...")
-			restart()
-		}
-		// err := runCommand("get.exe", "-N", "-q", "https://git.io/GeoLite2-ASN.mmdb")
-		// if err != nil {
-		// 	log.Println("Ошибка выполнения команды:", err)
-		// 	return
-		// }
-		// err = runCommand("get.exe", "-N", "-q", "https://git.io/GeoLite2-City.mmdb")
-		// if err != nil {
-		// 	log.Println("Ошибка выполнения команды:", err)
-		// 	return
-		// }
 		time.Sleep(5 * time.Minute) // Интервал повторной проверки
 	}
 }
 
+// перезапуск приложения
 func restart() {
 	// Получаем путь к текущему исполняемому файлу
 	execPath, err := os.Executable()
 	if err != nil {
-		log.Println(err)
+		log.Println(err, getLine())
 	}
 
 	// Запускаем новый экземпляр приложения с помощью os/exec
@@ -622,18 +467,19 @@ func restart() {
 	// Запускаем новый процесс и не ждем его завершения
 	err = cmd.Start()
 	if err != nil {
-		log.Println(err)
+		log.Println(err, getLine())
 	}
 
 	// Завершаем текущий процесс
 	os.Exit(0)
 }
 
+// оповещение о включении станции
 func messageStartWin(hostname string) {
 	var osInfo []Win32_OperatingSystem
 	err := wmi.Query("SELECT LastBootUpTime FROM Win32_OperatingSystem", &osInfo)
 	if err != nil {
-		log.Println(err)
+		log.Println(err, getLine())
 	}
 
 	lastBootUpTime := osInfo[0].LastBootUpTime
@@ -656,66 +502,62 @@ func messageStartWin(hostname string) {
 }
 
 // проверяем свободное место на дисках
-func diskSpace(hostname string) {
-	var text string = ""
-	partitions, err := disk.Partitions(false)
-	if err != nil {
-		log.Println(err)
-	}
-
-	for _, partition := range partitions {
-		usageStat, err := disk.Usage(partition.Mountpoint)
+func diskSpace(hostname string, checkFreeSpace bool) {
+	if checkFreeSpace {
+		var text string = ""
+		partitions, err := disk.Partitions(false)
 		if err != nil {
-			log.Printf("Error getting disk usage for %s: %v. %s\n", partition.Mountpoint, err, getLine())
-			continue
+			log.Println(err, getLine())
 		}
 
-		usedSpacePercent := usageStat.UsedPercent
+		for _, partition := range partitions {
+			usageStat, err := disk.Usage(partition.Mountpoint)
+			if err != nil {
+				log.Printf("Ошибка получения данных для диска %s: %v. %s\n", partition.Mountpoint, err, getLine())
+				continue
+			}
 
-		if usedSpacePercent > 90 {
-			text += fmt.Sprintf("На диске %s свободного места менее 10%%\n", partition.Mountpoint)
+			usedSpacePercent := usageStat.UsedPercent
+
+			if usedSpacePercent > 90 {
+				text += fmt.Sprintf("На диске %s свободного места менее 10%%\n", partition.Mountpoint)
+			}
 		}
-	}
 
-	// Если text не пустой, значит есть диск со свободным местом менее 10%, отправляем сообщение
-	if text != "" {
-		message := fmt.Sprintf("Внимание! Станция %s\n%s", hostname, text)
-		err := SendMessage(BotToken, Chat_IDint, message)
-		if err != nil {
-			log.Println("Ошибка отправки сообщения: ", err, getLine())
+		// Если text не пустой, значит есть диск со свободным местом менее 10%, отправляем сообщение
+		if text != "" {
+			message := fmt.Sprintf("Внимание! Станция %s\n%s", hostname, text)
+			err := SendMessage(BotToken, Chat_IDint, message)
+			if err != nil {
+				log.Println("Ошибка отправки сообщения: ", err, getLine())
+			}
 		}
 	}
 }
 
-func antiCheat(hostname string) {
-	// Проверяем наличие файла EasyAntiCheat_EOS.exe
-	filePath := "C:\\Program Files (x86)\\EasyAntiCheat_EOS\\EasyAntiCheat_EOS.exe"
-	if _, err := os.Stat(filePath); err == nil {
-		log.Printf("File %s exists\n", filePath)
-	} else if os.IsNotExist(err) {
-		log.Printf("Внимание! Станция %s\nОтсутствует файл %s", hostname, "EasyAntiCheat_EOS.exe")
-		message := fmt.Sprintf("Внимание! Станция %s\nОтсутствует файл %s", hostname, "EasyAntiCheat_EOS.exe")
-		err := SendMessage(BotToken, Chat_IDint, message)
-		if err != nil {
-			log.Println("Ошибка отправки сообщения: ", err, getLine())
+// проверка файлов античитов
+func antiCheat(hostname string, checkAntiCheat bool) {
+	if checkAntiCheat {
+		antiCheat := map[string]string{
+			"EasyAntiCheat_EOS": "C:\\Program Files (x86)\\EasyAntiCheat_EOS\\EasyAntiCheat_EOS.exe",
+			"EasyAntiCheat":     "C:\\Program Files (x86)\\EasyAntiCheat\\EasyAntiCheat.exe",
 		}
-	} else {
-		fmt.Printf("Error checking file %s: %s\n", filePath, err)
-	}
 
-	// Проверяем наличие файла EasyAntiCheat.exe
-	filePath1 := "C:\\Program Files (x86)\\EasyAntiCheat\\EasyAntiCheat.exe"
-	if _, err := os.Stat(filePath1); err == nil {
-		log.Printf("File %s exists\n", filePath1)
-	} else if os.IsNotExist(err) {
-		log.Printf("Внимание! Станция %s\nОтсутствует файл %s", hostname, "EasyAntiCheat.exe")
-		message := fmt.Sprintf("Внимание! Станция %s\nОтсутствует файл %s", hostname, "EasyAntiCheat.exe")
-		err := SendMessage(BotToken, Chat_IDint, message)
-		if err != nil {
-			log.Println("Ошибка отправки сообщения: ", err, getLine())
+		for key, value := range antiCheat {
+			filePath := value
+			if _, err := os.Stat(filePath); err == nil {
+				log.Printf("File %s exists\n", filePath)
+			} else if os.IsNotExist(err) {
+				log.Printf("Внимание! Станция %s\nОтсутствует файл %s", hostname, key)
+				message := fmt.Sprintf("Внимание! Станция %s\nОтсутствует файл %s", hostname, key)
+				err := SendMessage(BotToken, Chat_IDint, message)
+				if err != nil {
+					log.Println("Ошибка отправки сообщения: ", err, getLine())
+				}
+			} else {
+				log.Printf("Ошибка проверки файла %s: %s. %s\n", filePath, err, getLine())
+			}
 		}
-	} else {
-		fmt.Printf("Error checking file %s: %s\n", filePath, err)
 	}
 }
 
@@ -787,23 +629,12 @@ func writeDataToFile(data []string) {
 	}
 }
 
-// отключение триальщика
-// func blockESE() {
-// 	cmd := exec.Command("taskkill", "/IM", "ese.exe", "/F")
-// 	err := cmd.Run()
-// 	if err != nil {
-// 		log.Println("Failed to close the application:", err)
-// 		return
-// 	}
-// }
-
 // получаем данные из файла в виде ключ = значение
 func readConfig(keys, filename string) (string, error) {
 	var gname string
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Println("Ошибка при открытии файла ", filename, ": ", err, getLine())
-		fmt.Println("Ошибка при открытии файла ", filename, ": ", err)
 		return "Ошибка при открытии файла: ", err
 	}
 	defer file.Close()
@@ -831,34 +662,147 @@ func readConfig(keys, filename string) (string, error) {
 	return gname, err
 }
 
+// получение данны из файла конфига
 func takeBoolean(key string) (value bool) {
-	checkACheat, err := readConfig(key, fileConfig) // проверка папок античитов
+	check, err := readConfig(key, fileConfig)
 	if err != nil {
 		log.Printf("Ошибка - %s. %s\n", err, getLine())
 	}
-	if checkACheat == "true" {
+	if check == "true" {
 		value = true
-	} else if checkACheat == "false" {
+	} else if check == "false" {
 		value = false
 
 	}
 	return
 }
 
-func runCommand(command string, args ...string) error {
-	cmd := exec.Command(command, args...)
+// перезагрузка ПК
+func rebootPC() {
+	cmd := exec.Command("shutdown", "/r", "/t", "0")
 	err := cmd.Run()
 	if err != nil {
-		return err
+		log.Println(err)
 	}
-	return nil
 }
 
-// перезагрузка ПК
-// func rebootPC() {
-// 	cmd := exec.Command("shutdown", "/r", "/t", "0")
-// 	err := cmd.Run()
-// 	if err != nil {
-// 		log.Println(err)
-// 	}
-// }
+func commandBot(tokenBot, hostname string, userID int64) {
+	var message, hname string
+
+	hname = strings.ToLower(hostname)
+	bot, err := tgbotapi.NewBotAPI(tokenBot)
+	if err != nil {
+		log.Println(err)
+	}
+
+	// таймаут обновления бота
+	upd := tgbotapi.NewUpdate(0)
+	upd.Timeout = 60
+
+	// получаем обновления от API
+	updates := bot.GetUpdatesChan(upd)
+	if err != nil {
+		log.Println(err)
+	}
+
+	for update := range updates {
+		//проверяем тип обновления - только новые входящие сообщения
+		if update.Message != nil {
+
+			if update.Message.From.ID == userID {
+				message = strings.ToLower(update.Message.Text)
+
+				if strings.Contains(message, "/reboot") {
+					if strings.Contains(message, hname) { // Проверяем, что в тексте упоминается имя ПК
+						log.Println("Перезагрузка ПК по команде из телеграмма")
+						message := fmt.Sprintf("Станция %s будет перезагружена по команде из телеграмма", hostname)
+						err := SendMessage(BotToken, Chat_IDint, message)
+						if err != nil {
+							log.Println("Ошибка отправки сообщения: ", err, getLine())
+						}
+						rebootPC()
+					} else {
+						messageText := fmt.Sprintf("Имя ПК не совпадает: %s\n", hostname)
+						err := SendMessage(BotToken, Chat_IDint, messageText)
+						if err != nil {
+							log.Println("Ошибка отправки сообщения: ", err, getLine())
+						}
+					}
+				} else if strings.Contains(message, "/status") {
+					var serv serverManager                                          // структура serverManager
+					json.Unmarshal([]byte(getFromURL(UrlServers, serverID)), &serv) // декодируем JSON файл
+
+					var serverName, status, messageText string
+
+					i := 0
+					messageText = fmt.Sprintf("%s\n", hostname)
+					for range serv {
+						var sessionStart, server_ID string
+						serverName = serv[i].Name
+						status = serv[i].Status // Получаем статус сервера
+						server_ID = serv[i].Server_id
+
+						if status == "BUSY" || status == "HANDSHAKE" { // Получаем время начала, если станция занят
+							var data SessionsData                                             // структура SessionsData
+							json.Unmarshal([]byte(getFromURL(UrlSessions, server_ID)), &data) // декодируем JSON файл
+							startTime, _ := dateTimeS(data.Sessions[0].Created_on)
+							sessionStart = fmt.Sprintf("\n%s", startTime)
+						} else {
+							sessionStart = ""
+						}
+						messageText += fmt.Sprintf("%s - %s%s\n", serverName, status, sessionStart)
+						i++
+					}
+
+					err := SendMessage(BotToken, Chat_IDint, messageText)
+					if err != nil {
+						log.Println("Ошибка отправки сообщения: ", err, getLine())
+					}
+				} else {
+					messageText := "Неизвестная команда"
+					err := SendMessage(BotToken, Chat_IDint, messageText)
+					if err != nil {
+						log.Println("Ошибка отправки сообщения: ", err, getLine())
+					}
+				}
+			}
+			log.Printf("Сообщение от %d: %s", update.Message.From.ID, update.Message.Text)
+		}
+	}
+}
+
+func getFromURL(url, server_ID string) string {
+	// Создание HTTP клиента
+	client := &http.Client{}
+
+	// Создание нового GET-запроса
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Println("Failed to create request: ", err, getLine())
+	}
+
+	// Установка параметров запроса
+	q := req.URL.Query()
+	q.Add("server_id", server_ID)
+	req.URL.RawQuery = q.Encode()
+
+	// Установка заголовка X-Auth-Token
+	req.Header.Set("X-Auth-Token", authToken)
+
+	// Отправка запроса и получение ответа
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal("Failed to send request: ", err, getLine())
+	}
+	defer resp.Body.Close()
+
+	// Запись ответа в строку
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, resp.Body)
+	if err != nil {
+		log.Fatal("Failed to write response to buffer: ", err, getLine())
+	}
+
+	responseString := buf.String()
+	return responseString
+}

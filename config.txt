@@ -1,5 +1,6 @@
 tokenbot = 
 chatID = 
+UserID = 
 //onlineIpInfo может принимать значение только false или true. false - инфо по IP используя оффлайн базу GeoLite, true - инфо по IP через сайт ipinfo.io
 onlineIpInfo = true
 //onlineIpInfo может принимать значение только false или true. true - проверяем свободное место на дисках, false - не проверяем свободное место на дисках
@@ -8,3 +9,5 @@ checkFreeSpace = true
 checkAntiCheat = true
 // Для отключение блокировки "хитрых" триальщиков меняем значение на false, для включения - true
 trialBlock = false
+// включить команды управления ботом. true - включено, false - выключено
+commandON = true
