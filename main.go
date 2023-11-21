@@ -35,6 +35,7 @@ const (
 	newTitle    = "Drova Notifier v2"                                  // Имя окна программы
 	UrlSessions = "https://services.drova.io/session-manager/sessions" // инфо по сессиям
 	UrlServers  = "https://services.drova.io/server-manager/servers"   // для получения инфо по серверам
+	localPort   = "139"                                                // порт для определения IP станции
 )
 
 // для выгрузки названий игр с их ID
@@ -190,6 +191,7 @@ func main() {
 	if commandON {
 		go commandBot(BotToken, hostname, UserID)
 	}
+
 	for {
 		for i := 0; i != 2; { //ждем запуска приложения ese.exe
 			time.Sleep(5 * time.Second)                // интервал проверки запущенного процесса
@@ -203,7 +205,6 @@ func main() {
 				i = 2 //т.к. приложение запущено, выходим из цикла
 			}
 		}
-
 		// ждем закрытия процесса ese.exe
 		for i := 0; i != 3; {
 			isRunning = checkIfProcessRunning(appName)
@@ -404,7 +405,7 @@ func getASNRecord(mmdbCity, mmdbASN string, ip net.IP) (*CityRecord, *ASNRecord,
 }
 
 // инфо по IP - ipinfo.io
-func ipInf(ip string) string {
+func onlineDBip(ip string) string {
 	apiURL := fmt.Sprintf("https://ipinfo.io/%s/json", ip)
 	resp, err := http.Get(apiURL)
 	if err != nil {
@@ -805,4 +806,94 @@ func getFromURL(url, server_ID string) string {
 
 	responseString := buf.String()
 	return responseString
+}
+
+func getInterface() (localAddr, nameInterface string) {
+	var maxSpeed uint64 = 0
+	var localIP string
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		log.Printf("Ошибка получения интерфейсов. %s. %s\n", err, getLine())
+	}
+	maxSpeed = 0
+	for _, interf := range interfaces {
+		addrs, err := interf.Addrs()
+		nameI := interf.Name
+		if err != nil {
+			log.Printf("Ошибка получения ip адресов. %s. %s\n", err, getLine())
+		}
+		for _, add := range addrs {
+			if ip, ok := add.(*net.IPNet); ok {
+				log.Println("адрес = ", ip)
+				localIP = ip.String()
+			}
+		}
+		speed := getSpeed(nameI)
+		if speed > maxSpeed {
+			maxSpeed = speed
+			localAddr = localIP
+			nameInterface = nameI
+		}
+	}
+	return localAddr, nameInterface
+}
+
+func offlineDBip(ip string) string {
+	var city, region, asn string = "", "", ""
+
+	cityRecord, asnRecord, err := getASNRecord(mmdbCity, mmdbASN, net.ParseIP(ip))
+	if err != nil {
+		log.Println(err)
+	}
+
+	asn = asnRecord.AutonomousSystemOrganization // провайдер клиента
+	if err != nil {
+		log.Println(err, getLine())
+		asn = ""
+	}
+
+	if val, ok := cityRecord.City.Names["ru"]; ok { // город клиента
+		city = val
+		if err != nil {
+			log.Println(err, getLine())
+			city = ""
+		}
+	} else {
+		if val, ok := cityRecord.City.Names["en"]; ok {
+			city = val
+			if err != nil {
+				log.Println(err, getLine())
+				city = ""
+			}
+		}
+	}
+
+	if len(cityRecord.Subdivision) > 0 {
+		if val, ok := cityRecord.Subdivision[0].Names["ru"]; ok { // регион клиента
+			region = val
+			if err != nil {
+				log.Println(err, getLine())
+				region = ""
+			}
+		} else {
+			if val, ok := cityRecord.Subdivision[0].Names["en"]; ok {
+				region = val
+				if err != nil {
+					log.Println(err, getLine())
+					region = ""
+				}
+			}
+		}
+	}
+
+	if city != "" {
+		ipInfo = " - " + city
+	}
+	if region != "" {
+		ipInfo += " - " + region
+	}
+	if asn != "" {
+		ipInfo += " - " + asn
+	}
+	return ipInfo
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net"
 	"os/exec"
 	"strings"
 	"time"
@@ -33,41 +32,16 @@ func sessionInfo(status string) (infoString string) {
 	json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
 
 	if status == "Start" { // формируем текст для отправки
+		var serverIP string
+
 		game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
 		sessionOn, _ := dateTimeS(data.Sessions[0].Created_on)
 		ipInfo = ""
+
 		if onlineIpInfo {
-			ipInfo = ipInf(data.Sessions[0].Creator_ip)
+			ipInfo = onlineDBip(data.Sessions[0].Creator_ip)
 		} else {
-			ip := net.ParseIP(data.Sessions[0].Creator_ip)
-			cityRecord, asnRecord, err := getASNRecord(mmdbCity, mmdbASN, ip)
-			if err != nil {
-				log.Println(err)
-			}
-			asn := asnRecord.AutonomousSystemOrganization // провайдер клиента
-			if err != nil {
-				log.Println(err, getLine())
-				asn = ""
-			}
-			city := cityRecord.City.Names["ru"] // город клиента
-			if err != nil {
-				log.Println(err, getLine())
-				city = ""
-			}
-			region := cityRecord.Subdivision[0].Names["ru"] // регион клиента
-			if err != nil {
-				log.Println(err, getLine())
-				region = ""
-			}
-			if city != "" {
-				ipInfo = " - " + city
-			}
-			if region != "" {
-				ipInfo += " - " + region
-			}
-			if asn != "" {
-				ipInfo += " - " + asn
-			}
+			ipInfo = offlineDBip(data.Sessions[0].Creator_ip)
 		}
 		var billing string
 		billing = data.Sessions[0].Billing_type
@@ -101,8 +75,9 @@ func sessionInfo(status string) (infoString string) {
 				}
 			}
 		}
-
-		infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + ipInfo + "\n" + sessionOn + billing
+		localAddr, nameInterface := getInterface()
+		serverIP = "\n" + nameInterface + " - " + localAddr
+		infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + ipInfo + "\n" + sessionOn + billing + serverIP
 
 	} else if status == "Stop" { // высчитываем продолжительность сессии и формируем текст для отправки
 		var minute int
