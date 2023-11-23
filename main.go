@@ -597,8 +597,8 @@ func antiCheat(hostname string, checkAntiCheat bool) {
 }
 
 // trial - создание или обновление записи по ключу(ip)
-func createOrUpdateKeyValue(key string, value int, tfile string) {
-	data := readDataFromFile(tfile)
+func createOrUpdateKeyValue(key string, value int) {
+	data := readDataFromFile()
 	// Проверяем, существует ли уже ключ в файле
 	index := -1
 	for i, line := range data {
@@ -616,12 +616,12 @@ func createOrUpdateKeyValue(key string, value int, tfile string) {
 	} else {
 		data = append(data, key+"="+strconv.Itoa(newValue))
 	}
-	writeDataToFile(data, tfile)
+	writeDataToFile(data)
 }
 
 // trial - получаем значение по ключу(ip)
-func getValueByKey(key, tfile string) int {
-	data := readDataFromFile(tfile)
+func getValueByKey(key string) int {
+	data := readDataFromFile()
 	for _, line := range data {
 		parts := strings.Split(line, "=")
 		if parts[0] == key {
@@ -633,8 +633,8 @@ func getValueByKey(key, tfile string) int {
 }
 
 // trial - читаем файл построчно и сздаем слайс
-func readDataFromFile(tfile string) []string {
-	file, err := os.Open(tfile)
+func readDataFromFile() []string {
+	file, err := os.Open(trialfile)
 	if err != nil {
 		return []string{}
 	}
@@ -650,8 +650,8 @@ func readDataFromFile(tfile string) []string {
 }
 
 // trial записываем слайс в файл построчно
-func writeDataToFile(data []string, tfile string) {
-	file, err := os.OpenFile(tfile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+func writeDataToFile(data []string) {
+	file, err := os.OpenFile(trialfile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		panic(err)
 	}

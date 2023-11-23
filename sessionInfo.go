@@ -49,9 +49,9 @@ func sessionInfo(status string) (infoString string) {
 			billing = " - " + data.Sessions[0].Billing_type
 		}
 		if billing == "trial" {
-			sumTrial = getValueByKey(data.Sessions[0].Creator_ip, trialfile)
+			sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
 			if sumTrial == -1 { // нет записей по этому IP
-				createOrUpdateKeyValue(data.Sessions[0].Creator_ip, 0, trialfile)
+				createOrUpdateKeyValue(data.Sessions[0].Creator_ip, 0)
 				billing = " - " + data.Sessions[0].Billing_type
 			} else if sumTrial >= 0 && sumTrial < 19 { // уже подключался, но не играл в общей сложности 19 минуту
 				billing = fmt.Sprintf(" - TRIAL %dмин", sumTrial)
@@ -97,14 +97,14 @@ func sessionInfo(status string) (infoString string) {
 		var billingTrial string
 		billingTrial = ""
 		if billing == "trial" {
-			sumTrial = getValueByKey(data.Sessions[0].Creator_ip, trialfile)
+			sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
 			if sumTrial < 20 || !TrialBlock {
 				ipTrial := data.Sessions[0].Creator_ip
 				handshake := data.Sessions[0].Abort_comment
 				if !strings.Contains(handshake, "handshake") { // если кнопка "Играть тут" активированна, добавляем время в файл
-					createOrUpdateKeyValue(ipTrial, minute, trialfile)
+					createOrUpdateKeyValue(ipTrial, minute)
 				}
-				sumTrial = getValueByKey(data.Sessions[0].Creator_ip, trialfile)
+				sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
 				billingTrial = fmt.Sprintf("\nTrial %dмин", sumTrial)
 			} else if sumTrial > 20 && TrialBlock {
 				billingTrial = fmt.Sprintf("\nKICK - Trial %dмин", sumTrial)
