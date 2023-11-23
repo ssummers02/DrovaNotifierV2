@@ -33,12 +33,12 @@ func sessionInfo(status string) (infoString string) {
 
 	if status == "Start" { // формируем текст для отправки
 		var serverIP string
-
+		log.Printf("[INFO] Подключение %s, billing: %s\n", data.Sessions[0].Creator_ip, data.Sessions[0].Billing_type)
 		game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
 		sessionOn, _ := dateTimeS(data.Sessions[0].Created_on)
 		ipInfo = ""
 
-		if onlineIpInfo {
+		if OnlineIpInfo {
 			ipInfo = onlineDBip(data.Sessions[0].Creator_ip)
 		} else {
 			ipInfo = offlineDBip(data.Sessions[0].Creator_ip)
@@ -49,32 +49,33 @@ func sessionInfo(status string) (infoString string) {
 			billing = " - " + data.Sessions[0].Billing_type
 		}
 		if billing == "trial" {
-			sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
+			sumTrial = getValueByKey(data.Sessions[0].Creator_ip, trialfile)
 			if sumTrial == -1 { // нет записей по этому IP
-				createOrUpdateKeyValue(data.Sessions[0].Creator_ip, 0)
+				createOrUpdateKeyValue(data.Sessions[0].Creator_ip, 0, trialfile)
 				billing = " - " + data.Sessions[0].Billing_type
 			} else if sumTrial >= 0 && sumTrial < 19 { // уже подключался, но не играл в общей сложности 19 минуту
 				billing = fmt.Sprintf(" - TRIAL %dмин", sumTrial)
 			} else if sumTrial > 18 { // начал злоупотреблять
 				billing = fmt.Sprintf(" - TRIAL %dмин\nЗлоупотребление Триалом!", sumTrial)
 
-				if trialBlock {
+				if TrialBlock {
 					text := "Злоупотребление Триалом! Кикаем!"
 					message := fmt.Sprintf("Внимание! Станция %s.\n%s", hostname, text)
 					err := SendMessage(BotToken, Chat_IDint, message)
 					if err != nil {
-						log.Println("Ошибка отправки сообщения: ", err, getLine())
+						log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
 					}
-					log.Printf("Заблокировано соединение: %s. Trial %d", data.Sessions[0].Creator_ip, sumTrial)
+					log.Printf("[INFO] Заблокировано соединение: %s. Trial %d", data.Sessions[0].Creator_ip, sumTrial)
 					time.Sleep(10 * time.Second)
 					err = runCommand("taskkill", "/IM", "ese.exe", "/F")
 					if err != nil {
-						fmt.Println("Ошибка выполнения команды:", err)
+						log.Println("[ERORR] Ошибка выполнения команды:", err)
 						return
 					}
 				}
 			}
 		}
+
 		localAddr, nameInterface := getInterface()
 		serverIP = "\n" + nameInterface + " - " + localAddr
 		infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + ipInfo + "\n" + sessionOn + billing + serverIP
@@ -82,6 +83,7 @@ func sessionInfo(status string) (infoString string) {
 	} else if status == "Stop" { // высчитываем продолжительность сессии и формируем текст для отправки
 		var minute int
 		var duration, sessionDur string
+		log.Printf("[INFO] Отключение %s\n", data.Sessions[0].Creator_ip)
 		game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
 
 		_, stopTime := dateTimeS(data.Sessions[0].Finished_on)
@@ -95,16 +97,16 @@ func sessionInfo(status string) (infoString string) {
 		var billingTrial string
 		billingTrial = ""
 		if billing == "trial" {
-			sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
-			if sumTrial < 20 || !trialBlock {
+			sumTrial = getValueByKey(data.Sessions[0].Creator_ip, trialfile)
+			if sumTrial < 20 || !TrialBlock {
 				ipTrial := data.Sessions[0].Creator_ip
 				handshake := data.Sessions[0].Abort_comment
 				if !strings.Contains(handshake, "handshake") { // если кнопка "Играть тут" активированна, добавляем время в файл
-					createOrUpdateKeyValue(ipTrial, minute)
+					createOrUpdateKeyValue(ipTrial, minute, trialfile)
 				}
-				sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
+				sumTrial = getValueByKey(data.Sessions[0].Creator_ip, trialfile)
 				billingTrial = fmt.Sprintf("\nTrial %dмин", sumTrial)
-			} else if sumTrial > 20 && trialBlock {
+			} else if sumTrial > 20 && TrialBlock {
 				billingTrial = fmt.Sprintf("\nKICK - Trial %dмин", sumTrial)
 				sessionDur = ""
 			}
