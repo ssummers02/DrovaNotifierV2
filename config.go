@@ -10,7 +10,7 @@ var ( // true - включение функции, false - выключение
 	CheckFreeSpace    bool   = true           // проверка свободного места на дисках
 	AutoUpdateGeolite bool   = true           // автообновление файлов GeoLite с Github
 	TrialBlock        bool   = false          // Блокировка "хитрых" триальщиков
-	TrialfileLAN      string = `S:\trial.txt` // файл в сети
+	TrialfileLAN      string = `` // файл в сети пример `S:\trial.txt`
 	// Username          string = ""    // авторизация на сетевом хранилище(под будущее расширение функционала)
 	// Password          string = ""    // авторизация на сетевом хранилище(под будущее расширение функционала)
 	// DiskName          string = ""
