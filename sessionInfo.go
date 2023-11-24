@@ -84,6 +84,7 @@ func sessionInfo(status string) (infoString string) {
 		var minute int
 		var duration, sessionDur string
 		log.Printf("[INFO] Отключение %s\n", data.Sessions[0].Creator_ip)
+		time.Sleep(5 * time.Second)
 		game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
 
 		_, stopTime := dateTimeS(data.Sessions[0].Finished_on)
