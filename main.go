@@ -81,7 +81,7 @@ type Win32_OperatingSystem struct {
 }
 
 func main() {
-	BotToken, Chat_IDint, UserID = getConfigBot()
+	BotToken, Chat_IDint, UserID, serviceChatID = getConfigBot()
 	logFilePath := "log.log" // Имя файла для логирования ошибок
 	logFilePath = filepath.Join(filepath.Dir(os.Args[0]), logFilePath)
 	// Открываем файл для записи логов
@@ -105,22 +105,26 @@ func main() {
 	mmdbASN = filepath.Join(dir, "GeoLite2-ASN.mmdb")   // файл оффлайн базы IP. Провайдер
 	mmdbCity = filepath.Join(dir, "GeoLite2-City.mmdb") // файл оффлайн базы IP. Город и область
 
-	if TrialfileLAN != "" {
-		_, err = os.Stat(TrialfileLAN)
-		if os.IsNotExist(err) {
-			// Файл не существует
-			log.Printf("[INFO] Файл %s отсутствует или нет доступа к нему\n", TrialfileLAN)
-			trialfile = filepath.Join(dir, "trial.txt")
-			log.Println("[INFO] Запись триала в ", trialfile)
+	if TrialON {
+		if TrialfileLAN != "" {
+			_, err = os.Stat(TrialfileLAN)
+			if os.IsNotExist(err) {
+				// Файл не существует
+				log.Printf("[INFO] Файл %s отсутствует или нет доступа к нему\n", TrialfileLAN)
+				trialfile = filepath.Join(dir, "trial.txt")
+				log.Println("[INFO] Запись триала в ", trialfile)
+			} else {
+				trialfile = TrialfileLAN
+				log.Println("[INFO] Запись триала в ", trialfile)
+			}
 		} else {
-			trialfile = TrialfileLAN
+			trialfile = filepath.Join(dir, "trial.txt")
 			log.Println("[INFO] Запись триала в ", trialfile)
 		}
 	} else {
-		trialfile = filepath.Join(dir, "trial.txt")
-		log.Println("[INFO] Запись триала в ", trialfile)
+		TrialBlock = false
+		TrialfileLAN = ""
 	}
-
 	// Получаем имя ПК
 	hostname, err = os.Hostname()
 	if err != nil {
@@ -165,8 +169,16 @@ func main() {
 		OnlineIpInfo = takeBoolean("onlineIpInfo")     // настройки получения инфо по IP
 		CheckFreeSpace = takeBoolean("checkFreeSpace") // проверка свободного места на дисках
 		CheckAntiCheat = takeBoolean("checkAntiCheat") // проверка папок античитов
-		TrialBlock = takeBoolean("trialBlock")         // блокировка триальщиков
-		CommandON = takeBoolean("commandON")
+		CommandON = takeBoolean("commandON")           // управление ботом через чат ТГ
+		TrialON = takeBoolean("TrialON")               // статистика по триалу
+		if TrialON {
+			TrialBlock = takeBoolean("trialBlock")                     // блокировка триальщиков
+			TrialfileLAN, err = readConfig("TrialfileLAN", fileConfig) // определяем токен бота
+			if err != nil {
+				log.Printf("[ERROR] Ошибка - %s. %s\n", err, getLine())
+			}
+		}
+
 	}
 	if !OnlineIpInfo {
 		_, err = os.Stat(mmdbASN)
@@ -213,10 +225,12 @@ func main() {
 			isRunning = checkIfProcessRunning("ese.exe") // запущено ли приложение
 			if isRunning {
 				log.Println("[INFO] Старт сессии")
-				chatMessage := sessionInfo("Start")
-				err := SendMessage(BotToken, Chat_IDint, chatMessage)
-				if err != nil {
-					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+				if StartMessageON {
+					chatMessage := sessionInfo("Start")
+					err := SendMessage(BotToken, Chat_IDint, chatMessage)
+					if err != nil {
+						log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+					}
 				}
 				i = 2 //т.к. приложение запущено, выходим из цикла
 			}
@@ -226,12 +240,15 @@ func main() {
 			isRunning = checkIfProcessRunning("ese.exe")
 			if !isRunning {
 				log.Println("[INFO] Завершение сессии")
-				chatMessage := sessionInfo("Stop")                    // формируем сообщение об окончании сессии
-				err := SendMessage(BotToken, Chat_IDint, chatMessage) // отправка сообщения
-				if err != nil {
-					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+				if StopMessageON {
+					chatMessage := sessionInfo("Stop") // формируем сообщение об окончании сессии
+					if chatMessage != "off" {
+						err := SendMessage(BotToken, Chat_IDint, chatMessage) // отправка сообщения
+						if err != nil {
+							log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+						}
+					}
 				}
-
 				antiCheat(hostname, CheckAntiCheat) // проверка античитов
 				diskSpace(hostname, CheckFreeSpace) // проверка свободного места на дисках
 				if !OnlineIpInfo {
@@ -239,6 +256,7 @@ func main() {
 						updateGeoLite(mmdbASN, mmdbCity) // проверяем обновления файлов GeoLite
 					}
 				}
+
 				i = 3 // выходим из цикла
 			}
 			time.Sleep(5 * time.Second) // интервал проверки запущенного процесса
@@ -352,7 +370,7 @@ func dur(stopTime, startTime time.Time) (string, int) {
 		seconds := int(duration.Seconds()) % 60
 		hou := strconv.Itoa(hours)
 		sessionDur = ""
-		if hours < 2 {
+		if hours < 10 {
 			sessionDur = sessionDur + "0" + hou + ":"
 		} else {
 			sessionDur = sessionDur + hou + ":"
@@ -369,6 +387,13 @@ func dur(stopTime, startTime time.Time) (string, int) {
 		} else {
 			sessionDur = sessionDur + sec
 		}
+		if !shortSessionON {
+			m := minMinute()
+			if hours == 0 && minutes < m {
+				sessionDur = "off"
+			}
+		}
+
 	} else {
 		sessionDur = "[ERROR] Ошибка получения времени окончания сессии"
 		log.Println(sessionDur)
@@ -530,9 +555,16 @@ func messageStartWin(hostname string) {
 	// Если прошло менее 5 минут с момента запуска Windows
 	if duration.Minutes() < 5 {
 		message := fmt.Sprintf("Внимание! Станция %s запущена менее 5 минут назад!\nВремя запуска - %s", hostname, formattedTime)
-		err := SendMessage(BotToken, Chat_IDint, message)
-		if err != nil {
-			log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+		if serviceChatID != 0 {
+			err := SendMessage(BotToken, serviceChatID, message)
+			if err != nil {
+				log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+			}
+		} else {
+			err := SendMessage(BotToken, Chat_IDint, message)
+			if err != nil {
+				log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+			}
 		}
 	}
 }
@@ -562,10 +594,18 @@ func diskSpace(hostname string, checkFreeSpace bool) {
 
 		// Если text не пустой, значит есть диск со свободным местом менее 10%, отправляем сообщение
 		if text != "" {
-			message := fmt.Sprintf("Внимание! Станция %s\n%s", hostname, text)
-			err := SendMessage(BotToken, Chat_IDint, message)
-			if err != nil {
-				log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+			if serviceChatID != 0 {
+				message := fmt.Sprintf("Внимание! Станция %s\n%s", hostname, text)
+				err := SendMessage(BotToken, serviceChatID, message)
+				if err != nil {
+					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+				}
+			} else {
+				message := fmt.Sprintf("Внимание! Станция %s\n%s", hostname, text)
+				err := SendMessage(BotToken, Chat_IDint, message)
+				if err != nil {
+					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+				}
 			}
 		}
 	}
@@ -585,9 +625,16 @@ func antiCheat(hostname string, checkAntiCheat bool) {
 			} else if os.IsNotExist(err) {
 				log.Printf("[INFO] Внимание! Станция %s\nОтсутствует файл %s", hostname, key)
 				message := fmt.Sprintf("[INFO] Внимание! Станция %s\nОтсутствует файл %s", hostname, key)
-				err := SendMessage(BotToken, Chat_IDint, message)
-				if err != nil {
-					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+				if serviceChatID != 0 {
+					err := SendMessage(BotToken, serviceChatID, message)
+					if err != nil {
+						log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+					}
+				} else {
+					err := SendMessage(BotToken, Chat_IDint, message)
+					if err != nil {
+						log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+					}
 				}
 			} else {
 				log.Printf("[ERROR] Ошибка проверки файла %s: %s. %s\n", filePath, err, getLine())
@@ -757,11 +804,7 @@ func commandBot(tokenBot, hostname string, userID int64) {
 						}
 						rebootPC()
 					} else {
-						messageText := fmt.Sprintf("Имя ПК не совпадает: %s\n", hostname)
-						err := SendMessage(BotToken, Chat_IDint, messageText)
-						if err != nil {
-							log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
-						}
+						anotherPC(hostname)
 					}
 				} else if strings.Contains(message, "/status") {
 					var serv serverManager                                          // структура serverManager
@@ -792,6 +835,30 @@ func commandBot(tokenBot, hostname string, userID int64) {
 					err := SendMessage(BotToken, Chat_IDint, messageText)
 					if err != nil {
 						log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+					}
+				} else if strings.Contains(message, "/visible") {
+					if strings.Contains(message, hname) { // Проверяем, что в тексте упоминается имя ПК
+						viewStation("true", serverID)
+						log.Printf("Станция %s в сети\n", hostname)
+						message := fmt.Sprintf("Станция %s видна клиентам", hostname)
+						err := SendMessage(BotToken, Chat_IDint, message)
+						if err != nil {
+							log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+						}
+					} else {
+						anotherPC(hostname)
+					}
+				} else if strings.Contains(message, "/invisible") {
+					if strings.Contains(message, hname) { // Проверяем, что в тексте упоминается имя ПК
+						viewStation("false", serverID)
+						log.Printf("Станция %s спрятана\n", hostname)
+						message := fmt.Sprintf("Станция %s спрятана от клиентов", hostname)
+						err := SendMessage(BotToken, Chat_IDint, message)
+						if err != nil {
+							log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+						}
+					} else {
+						anotherPC(hostname)
 					}
 				} else {
 					messageText := "Неизвестная команда"
@@ -890,9 +957,16 @@ func esmeCheck(hostname string) {
 
 		if !checkIfProcessRunning("esme.exe") { // если сервис не запущен
 			chatMessage := fmt.Sprintf("ВНИМАНИЕ! Станции %s offline\nНе запущено esme.exe", hostname) // формируем сообщение
-			err := SendMessage(BotToken, Chat_IDint, chatMessage)                                      // отправка сообщения
-			if err != nil {
-				log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+			if serviceChatID != 0 {
+				err := SendMessage(BotToken, serviceChatID, chatMessage) // отправка сообщения
+				if err != nil {
+					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+				}
+			} else {
+				err := SendMessage(BotToken, Chat_IDint, chatMessage) // отправка сообщения
+				if err != nil {
+					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+				}
 			}
 			log.Printf("[INFO] Не запущено esme.exe на станции %s\n", hostname) // записываем в лог
 			i++                                                                 // ведем счет отправленных сообщений
@@ -911,6 +985,34 @@ func validToken(regFolder, authToken string) {
 		}
 		time.Sleep(5 * time.Minute)
 	}
+}
+func anotherPC(hostname string) {
+	messageText := fmt.Sprintf("Имя ПК не совпадает: %s\n", hostname)
+	err := SendMessage(BotToken, Chat_IDint, messageText)
+	if err != nil {
+		log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+	}
+}
+
+// скрыть\отобразить станцию
+func viewStation(seeSt, serverID string) {
+	url := "https://services.drova.io/server-manager/servers/" + serverID + "/set_published/" + seeSt
+
+	request, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		fmt.Println("Ошибка при создании запроса:", err)
+		return
+	}
+
+	request.Header.Set("X-Auth-Token", authToken) // Установка заголовка X-Auth-Token
+
+	client := &http.Client{}
+	response, err := client.Do(request)
+	if err != nil {
+		fmt.Println("Ошибка при отправке запроса:", err)
+		return
+	}
+	defer response.Body.Close()
 }
 
 // func restartService() {
