@@ -26,7 +26,7 @@ import (
 
 var (
 	fileConfig, fileGames, hostname, ipInfo, trialfile string
-	serverID, authToken, mmdbASN, mmdbCity             string
+	serverID, authToken, mmdbASN, mmdbCity, Session_ID string
 	isRunning                                          bool
 )
 
@@ -249,6 +249,8 @@ func main() {
 						}
 					}
 				}
+				go GetComment()
+
 				antiCheat(hostname, CheckAntiCheat) // проверка античитов
 				diskSpace(hostname, CheckFreeSpace) // проверка свободного места на дисках
 				if !OnlineIpInfo {
@@ -365,9 +367,13 @@ func dur(stopTime, startTime time.Time) (string, int) {
 	var sessionDur string
 	if stopTime.String() != "" {
 		duration := stopTime.Sub(startTime).Round(time.Second)
+		// log.Println("[DIAG]duration - ", duration)
 		hours := int(duration.Hours())
+		// log.Println("[DIAG]hours - ", hours)
 		minutes = int(duration.Minutes()) % 60
+		// log.Println("[DIAG]minutes - ", minutes)
 		seconds := int(duration.Seconds()) % 60
+		// log.Println("[DIAG]seconds - ", seconds)
 		hou := strconv.Itoa(hours)
 		sessionDur = ""
 		if hours < 10 {
@@ -807,8 +813,8 @@ func commandBot(tokenBot, hostname string, userID int64) {
 						anotherPC(hostname)
 					}
 				} else if strings.Contains(message, "/status") {
-					var serv serverManager                                          // структура serverManager
-					json.Unmarshal([]byte(getFromURL(UrlServers, serverID)), &serv) // декодируем JSON файл
+					var serv serverManager                                                       // структура serverManager
+					json.Unmarshal([]byte(getFromURL(UrlServers, "server_id", serverID)), &serv) // декодируем JSON файл
 
 					var serverName, status, messageText string
 
@@ -821,8 +827,8 @@ func commandBot(tokenBot, hostname string, userID int64) {
 						server_ID = serv[i].Server_id
 
 						if status == "BUSY" || status == "HANDSHAKE" { // Получаем время начала, если станция занят
-							var data SessionsData                                             // структура SessionsData
-							json.Unmarshal([]byte(getFromURL(UrlSessions, server_ID)), &data) // декодируем JSON файл
+							var data SessionsData                                                          // структура SessionsData
+							json.Unmarshal([]byte(getFromURL(UrlSessions, "server_id", server_ID)), &data) // декодируем JSON файл
 							startTime, _ := dateTimeS(data.Sessions[0].Created_on)
 							sessionStart = fmt.Sprintf("\n%s", startTime)
 						} else {
@@ -873,7 +879,7 @@ func commandBot(tokenBot, hostname string, userID int64) {
 	}
 }
 
-func getFromURL(url, server_ID string) string {
+func getFromURL(url, cell, IDinCell string) string {
 	// Создание HTTP клиента
 	client := &http.Client{}
 
@@ -885,7 +891,7 @@ func getFromURL(url, server_ID string) string {
 
 	// Установка параметров запроса
 	q := req.URL.Query()
-	q.Add("server_id", server_ID)
+	q.Add(cell, IDinCell)
 	req.URL.RawQuery = q.Encode()
 
 	// Установка заголовка X-Auth-Token
@@ -1013,6 +1019,16 @@ func viewStation(seeSt, serverID string) {
 		return
 	}
 	defer response.Body.Close()
+}
+
+func GetComment() {
+	chatMessage := sessionInfo("Comment") // формируем сообщение с комментарием
+	if chatMessage != "off" {
+		err := SendMessage(BotToken, Chat_IDint, chatMessage) // отправка сообщения
+		if err != nil {
+			log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+		}
+	}
 }
 
 // func restartService() {
