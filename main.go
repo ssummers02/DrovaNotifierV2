@@ -241,16 +241,11 @@ func main() {
 			if !isRunning {
 				log.Println("[INFO] Завершение сессии")
 				if StopMessageON {
-					chatMessage := sessionInfo("Stop") // формируем сообщение об окончании сессии
-					if chatMessage != "off" {
-						err := SendMessage(BotToken, Chat_IDint, chatMessage) // отправка сообщения
-						if err != nil {
-							log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
-						}
-					}
+					go GetComment("Stop")
 				}
-				go GetComment()
-
+				if CommentMessageON {
+					go GetComment("Comment")
+				}
 				antiCheat(hostname, CheckAntiCheat) // проверка античитов
 				diskSpace(hostname, CheckFreeSpace) // проверка свободного места на дисках
 				if !OnlineIpInfo {
@@ -393,7 +388,7 @@ func dur(stopTime, startTime time.Time) (string, int) {
 		} else {
 			sessionDur = sessionDur + sec
 		}
-		if !shortSessionON {
+		if !ShortSessionON {
 			m := minMinute()
 			if hours == 0 && minutes < m {
 				sessionDur = "off"
@@ -1021,8 +1016,8 @@ func viewStation(seeSt, serverID string) {
 	defer response.Body.Close()
 }
 
-func GetComment() {
-	chatMessage := sessionInfo("Comment") // формируем сообщение с комментарием
+func GetComment(status string) {
+	chatMessage := sessionInfo(status) // формируем сообщение с комментарием
 	if chatMessage != "off" {
 		err := SendMessage(BotToken, Chat_IDint, chatMessage) // отправка сообщения
 		if err != nil {

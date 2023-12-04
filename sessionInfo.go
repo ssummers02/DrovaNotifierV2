@@ -36,8 +36,8 @@ func sessionInfo(status string) (infoString string) {
 		var data SessionsData                         // структура SessionsData
 		json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
 		Session_ID = data.Sessions[0].Session_uuid
-
 		log.Printf("[INFO] Подключение %s, billing: %s\n", data.Sessions[0].Creator_ip, data.Sessions[0].Billing_type)
+		log.Println("[DIAG-start]Session_ID - ", Session_ID)
 		game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
 		sessionOn, _ := dateTimeS(data.Sessions[0].Created_on)
 		ipInfo = ""
@@ -86,39 +86,54 @@ func sessionInfo(status string) (infoString string) {
 		infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + ipInfo + "\n" + sessionOn + billing + serverIP
 
 	} else if status == "Stop" { // высчитываем продолжительность сессии и формируем текст для отправки
-		responseString := getFromURL(UrlSessions, "uuid", Session_ID)
+		// responseString := getFromURL(UrlSessions, "uuid", Session_ID)
 
-		var data SessionsData                         // структура SessionsData
-		json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
+		// var data SessionsData // структура SessionsData
+		// json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
 
 		var minute int
-		var sessionDur string
-		log.Printf("[INFO] Отключение %s\n", data.Sessions[0].Creator_ip)
-		time.Sleep(10 * time.Second)
-		game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
+		var sessionDur, responseString string
+		var stopTime, startTime time.Time
+		var dataS SessionsData
 
-		_, stopTime := dateTimeS(data.Sessions[0].Finished_on)
-		// log.Println("[DIAG]data.Sessions[0].Finished_on - ", data.Sessions[0].Finished_on)
-		// log.Println("[DIAG]stopTime - ", stopTime)
-		_, startTime := dateTimeS(data.Sessions[0].Created_on)
-		// log.Println("[DIAG]data.Sessions[0].Created_on - ", data.Sessions[0].Created_on)
-		// log.Println("[DIAG]startTime - ", startTime)
-		if data.Sessions[0].Created_on < data.Sessions[0].Finished_on {
-			sessionDur, minute = dur(stopTime, startTime)
+		session_ID := Session_ID
+		// log.Printf("[INFO] Отключение %s\n", data.Sessions[0].Creator_ip)
+		for i := 0; i < 12; i++ {
+			responseString = getFromURL(UrlSessions, "uuid", session_ID)
+			json.Unmarshal([]byte(responseString), &dataS) // декодируем JSON файл
+			test := dataS.Sessions[0].Finished_on
+			if test == 0 {
+				time.Sleep(5 * time.Second)
+				text := fmt.Sprintf("stopTime = %d", dataS.Sessions[0].Finished_on)
+				sessionDur = text
+			} else {
+				log.Printf("[INFO] Отключение %s\n", dataS.Sessions[0].Creator_ip)
+				_, stopTime = dateTimeS(dataS.Sessions[0].Finished_on)
+				_, startTime = dateTimeS(dataS.Sessions[0].Created_on)
+				sessionDur, minute = dur(stopTime, startTime)
+				i = 12
+			}
 		}
-		billing := data.Sessions[0].Billing_type
+
+		// json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
+		log.Printf("[INFO] Отключение %s\n", dataS.Sessions[0].Creator_ip)
+		game, _ := readConfig(dataS.Sessions[0].Product_id, fileGames)
+		log.Println("[DIAG-stop]Session_ID - ", Session_ID)
+		log.Println("[DIAG-stop]data.Sessions[0].Finished_on - ", dataS.Sessions[0].Finished_on)
+		log.Println("[DIAG-stop]stopTime - ", stopTime)
+		billing := dataS.Sessions[0].Billing_type
 		if sessionDur != "off" {
 			var billingTrial string = ""
 			if TrialON {
 				if billing == "trial" {
-					sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
+					sumTrial = getValueByKey(dataS.Sessions[0].Creator_ip)
 					if sumTrial < 20 || !TrialBlock {
-						ipTrial := data.Sessions[0].Creator_ip
-						handshake := data.Sessions[0].Abort_comment
+						ipTrial := dataS.Sessions[0].Creator_ip
+						handshake := dataS.Sessions[0].Abort_comment
 						if !strings.Contains(handshake, "handshake") { // если кнопка "Играть тут" активированна, добавляем время в файл
 							createOrUpdateKeyValue(ipTrial, minute)
 						}
-						sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
+						sumTrial = getValueByKey(dataS.Sessions[0].Creator_ip)
 						billingTrial = fmt.Sprintf("\nTrial %dмин", sumTrial)
 					} else if sumTrial > 20 && TrialBlock {
 						billingTrial = fmt.Sprintf("\nKICK - Trial %dмин", sumTrial)
@@ -127,54 +142,47 @@ func sessionInfo(status string) (infoString string) {
 				}
 			}
 			var comment string
-			if data.Sessions[0].Abort_comment != "" {
-				comment = "\n" + data.Sessions[0].Abort_comment
+			if dataS.Sessions[0].Abort_comment != "" {
+				comment = "\n" + dataS.Sessions[0].Abort_comment
 			}
 			if !StartMessageON {
 				if OnlineIpInfo {
-					ipInfo = onlineDBip(data.Sessions[0].Creator_ip)
+					ipInfo = onlineDBip(dataS.Sessions[0].Creator_ip)
 				} else {
-					ipInfo = offlineDBip(data.Sessions[0].Creator_ip)
+					ipInfo = offlineDBip(dataS.Sessions[0].Creator_ip)
 				}
-				infoString = "[-]" + hostname + " - " + game + "\n" + sessionDur + "\n" + data.Sessions[0].Creator_ip + ipInfo + "\n" + comment + billingTrial + "\n" + serverIP
+				infoString = "[-]" + hostname + " - " + game + "\n" + sessionDur + "\n" + dataS.Sessions[0].Creator_ip + ipInfo + "\n" + comment + billingTrial + "\n" + serverIP
 			} else {
-				infoString = "[-]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + " - " + sessionDur + comment + billingTrial
+				infoString = "[-]" + hostname + " - " + game + "\n" + dataS.Sessions[0].Creator_ip + " - " + sessionDur + comment + billingTrial
 			}
 
 		} else {
 			infoString = "off"
 		}
 	} else if status == "Comment" { // проверяем написание коммента
+		var sessionDur, responseString, commentC, game string
+		var stopTime, startTime time.Time
+		var dataC SessionsData
+
 		session_ID := Session_ID
-		time.Sleep(2 * time.Minute)
-		responseString := getFromURL(UrlSessions, "uuid", session_ID)
 
-		var data SessionsData                         // структура SessionsData
-		json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
-
-		if data.Sessions[0].Comment != "" {
-
-			// var minute int
-			var sessionDur, commentC string
-			log.Printf("[INFO] Получение комментария %s\n, %s ", data.Sessions[0].Creator_ip, session_ID)
-			game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
-			_, stopTime := dateTimeS(data.Sessions[0].Finished_on)
-			_, startTime := dateTimeS(data.Sessions[0].Created_on)
-			sessionDur, _ = dur(stopTime, startTime)
-
-			// billing := data.Sessions[0].Billing_type
-			// var score, scoreReason, commentC string
-			// score = data.Sessions[0].Score
-			// scoreReason = data.Sessions[0].ScoreReason
-			commentC = data.Sessions[0].Comment
-
-			// if OnlineIpInfo {
-			// 	ipInfo = onlineDBip(data.Sessions[0].Creator_ip)
-			// } else {
-			// 	ipInfo = offlineDBip(data.Sessions[0].Creator_ip)
-			// }
-			infoString = hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + " - " + sessionDur + "\n" + commentC
-
+		for i := 0; i < 18; i++ {
+			responseString = getFromURL(UrlSessions, "uuid", session_ID)
+			json.Unmarshal([]byte(responseString), &dataC) // декодируем JSON файл
+			// test := dataC.Sessions[0].Finished_on
+			if dataC.Sessions[0].Comment == "" {
+				time.Sleep(10 * time.Second)
+			} else {
+				log.Printf("[INFO] Отключение %s\n", dataC.Sessions[0].Creator_ip)
+				game, _ = readConfig(dataC.Sessions[0].Product_id, fileGames)
+				_, stopTime = dateTimeS(dataC.Sessions[0].Finished_on)
+				_, startTime = dateTimeS(dataC.Sessions[0].Created_on)
+				sessionDur, _ = dur(stopTime, startTime)
+				commentC = dataC.Sessions[0].Comment
+				log.Printf("[INFO] Получение комментария %s\n, %s ", dataC.Sessions[0].Creator_ip, session_ID)
+				infoString = hostname + " - " + game + "\n" + dataC.Sessions[0].Creator_ip + " - " + sessionDur + "\n" + commentC
+				i = 18
+			}
 		}
 	}
 	return infoString
