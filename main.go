@@ -72,6 +72,7 @@ type serverManager []struct {
 	Name         string `json:"name"`
 	User_id      string `json:"user_id"`
 	Status       string `json:"state"`
+	Public       bool   `json:"published"`
 	SessionStart int64  `json:"alive_since"`
 }
 
@@ -956,8 +957,24 @@ func esmeCheck(hostname string) {
 			time.Sleep(60 * time.Minute) // интервал проверки
 		}
 
-		if !checkIfProcessRunning("esme.exe") { // если сервис не запущен
-			chatMessage := fmt.Sprintf("ВНИМАНИЕ! Станции %s offline\nНе запущено esme.exe", hostname) // формируем сообщение
+		responseString := getFromURL(UrlServers, "uuid", serverID)
+		var serv serverManager                        // структура serverManager
+		json.Unmarshal([]byte(responseString), &serv) // декодируем JSON файл
+
+		var x, y int8 = 0, 0
+
+		for range serv {
+			if serv[x].Server_id == serverID {
+				y = x
+			}
+			x++
+		}
+		// serverStatus := serv[y].Status
+		// publ := serv[y].Public
+		// log.Printf("serverStatus = %s, publ = %t\n, serverID = %s", serverStatus, publ, serv[y].Server_id)
+
+		if !checkIfProcessRunning("esme.exe") || (serv[y].Status == "OFFLINE" && serv[y].Public) { // если сервис не запущен
+			chatMessage := fmt.Sprintf("ВНИМАНИЕ! Станции %s offline", hostname) // формируем сообщение
 			if serviceChatID != 0 {
 				err := SendMessage(BotToken, serviceChatID, chatMessage) // отправка сообщения
 				if err != nil {
@@ -969,14 +986,15 @@ func esmeCheck(hostname string) {
 					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
 				}
 			}
-			log.Printf("[INFO] Не запущено esme.exe на станции %s\n", hostname) // записываем в лог
-			i++                                                                 // ведем счет отправленных сообщений
+			log.Printf("[INFO] Станции %s offline\n", hostname) // записываем в лог
+			i++                                                 // ведем счет отправленных сообщений
 		} else {
 			i, y = 0, 0
 		}
 	}
 }
 
+// проверка на валидность токена
 func validToken(regFolder, authToken string) {
 	for {
 		authTokenV := regGet(regFolder, "auth_token") // получаем токен для авторизации
@@ -987,6 +1005,7 @@ func validToken(regFolder, authToken string) {
 		time.Sleep(5 * time.Minute)
 	}
 }
+
 func anotherPC(hostname string) {
 	messageText := fmt.Sprintf("Имя ПК не совпадает: %s\n", hostname)
 	err := SendMessage(BotToken, Chat_IDint, messageText)

@@ -37,7 +37,6 @@ func sessionInfo(status string) (infoString string) {
 		json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
 		Session_ID = data.Sessions[0].Session_uuid
 		log.Printf("[INFO] Подключение %s, billing: %s\n", data.Sessions[0].Creator_ip, data.Sessions[0].Billing_type)
-		log.Println("[DIAG-start]Session_ID - ", Session_ID)
 		game, _ := readConfig(data.Sessions[0].Product_id, fileGames)
 		sessionOn, _ := dateTimeS(data.Sessions[0].Created_on)
 		ipInfo = ""
@@ -50,18 +49,18 @@ func sessionInfo(status string) (infoString string) {
 		var billing string
 		billing = data.Sessions[0].Billing_type
 		if billing != "" && billing != "trial" {
-			billing = " - " + data.Sessions[0].Billing_type
+			billing = data.Sessions[0].Billing_type
 		}
 		if TrialON {
 			if billing == "trial" {
 				sumTrial = getValueByKey(data.Sessions[0].Creator_ip)
 				if sumTrial == -1 { // нет записей по этому IP
 					createOrUpdateKeyValue(data.Sessions[0].Creator_ip, 0)
-					billing = " - " + data.Sessions[0].Billing_type
+					billing = data.Sessions[0].Billing_type
 				} else if sumTrial >= 0 && sumTrial < 19 { // уже подключался, но не играл в общей сложности 19 минуту
-					billing = fmt.Sprintf(" - TRIAL %dмин", sumTrial)
+					billing = fmt.Sprintf("TRIAL %dмин", sumTrial)
 				} else if sumTrial > 18 { // начал злоупотреблять
-					billing = fmt.Sprintf(" - TRIAL %dмин\nЗлоупотребление Триалом!", sumTrial)
+					billing = fmt.Sprintf("TRIAL %dмин\nЗлоупотребление Триалом!", sumTrial)
 
 					if TrialBlock {
 						text := "Злоупотребление Триалом! Кикаем!"
@@ -83,7 +82,7 @@ func sessionInfo(status string) (infoString string) {
 		}
 		localAddr, nameInterface := getInterface()
 		serverIP = "\n" + nameInterface + " - " + localAddr
-		infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + ipInfo + "\n" + sessionOn + billing + serverIP
+		infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + ipInfo + "\n" + sessionOn + " - " + billing + serverIP
 
 	} else if status == "Stop" { // высчитываем продолжительность сессии и формируем текст для отправки
 		// responseString := getFromURL(UrlSessions, "uuid", Session_ID)
@@ -107,7 +106,6 @@ func sessionInfo(status string) (infoString string) {
 				text := fmt.Sprintf("stopTime = %d", dataS.Sessions[0].Finished_on)
 				sessionDur = text
 			} else {
-				log.Printf("[INFO] Отключение %s\n", dataS.Sessions[0].Creator_ip)
 				_, stopTime = dateTimeS(dataS.Sessions[0].Finished_on)
 				_, startTime = dateTimeS(dataS.Sessions[0].Created_on)
 				sessionDur, minute = dur(stopTime, startTime)
@@ -118,9 +116,6 @@ func sessionInfo(status string) (infoString string) {
 		// json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
 		log.Printf("[INFO] Отключение %s\n", dataS.Sessions[0].Creator_ip)
 		game, _ := readConfig(dataS.Sessions[0].Product_id, fileGames)
-		log.Println("[DIAG-stop]Session_ID - ", Session_ID)
-		log.Println("[DIAG-stop]data.Sessions[0].Finished_on - ", dataS.Sessions[0].Finished_on)
-		log.Println("[DIAG-stop]stopTime - ", stopTime)
 		billing := dataS.Sessions[0].Billing_type
 		if sessionDur != "off" {
 			var billingTrial string = ""
