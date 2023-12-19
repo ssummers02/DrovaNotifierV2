@@ -82,19 +82,22 @@ type Win32_OperatingSystem struct {
 }
 
 func main() {
+	time.Sleep(20 * time.Second)
 	BotToken, Chat_IDint, UserID, serviceChatID = getConfigBot()
 	logFilePath := "log.log" // Имя файла для логирования ошибок
 	logFilePath = filepath.Join(filepath.Dir(os.Args[0]), logFilePath)
 	// Открываем файл для записи логов
 	logFile, err := os.OpenFile(logFilePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		log.Fatal("[ERROR] Ошибка открытия файла", err, getLine())
+		log.Println("[ERROR] Ошибка открытия файла", err, getLine())
+		restart()
 	}
 	defer logFile.Close()
 	// Получаем текущую директорию программы
 	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
-		log.Fatal("[ERROR] Ошибка получения текущей деректории: ", err, getLine())
+		log.Println("[ERROR] Ошибка получения текущей деректории: ", err, getLine())
+		restart()
 	}
 	// Устанавливаем файл в качестве вывода для логгера
 	log.SetOutput(logFile)
@@ -215,6 +218,15 @@ func main() {
 	diskSpace(hostname, CheckFreeSpace) // проверка свободного места на дисках
 	messageStartWin(hostname)           // проверка времени запуска станции
 	go esmeCheck(hostname)              // запуск мониторинга сервиса дров
+	if checkIfProcessRunning("LibreHardwareMonitor.exe") && CheckTempON {
+		go CheckHWt(hostname) // мониторинг температур
+	} else if !checkIfProcessRunning("LibreHardwareMonitor.exe") && CheckTempON {
+		chatMessage := "LibreHardwareMonitor не запущен. Перезапустите приложение после запуска LibreHardwareMonitor"
+		err := SendMessage(BotToken, Chat_IDint, chatMessage)
+		if err != nil {
+			log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+		}
+	}
 
 	if CommandON {
 		go commandBot(BotToken, hostname, UserID)
@@ -267,7 +279,7 @@ func checkIfProcessRunning(processName string) bool {
 	cmd := exec.Command("tasklist")
 	output, err := cmd.Output()
 	if err != nil {
-		log.Fatal("[ERROR] Ошибка получения списка процессов:", err, getLine())
+		log.Println("[ERROR] Ошибка получения списка процессов:", err, getLine())
 	}
 	return strings.Contains(string(output), processName)
 }
@@ -862,6 +874,19 @@ func commandBot(tokenBot, hostname string, userID int64) {
 					} else {
 						anotherPC(hostname)
 					}
+				} else if strings.Contains(message, "/temp") {
+					// if strings.Contains(message, hname) { // Проверяем, что в тексте упоминается имя ПК
+					log.Println("Получение температур и оборотов вентиляторов")
+					_, _, _, _, _, _, _, message := GetTemperature()
+					// message := fmt.Sprintf("Станция %s будет перезагружена по команде из телеграмма", hostname)
+					message = hname + "\n" + message
+					err := SendMessage(BotToken, Chat_IDint, message)
+					if err != nil {
+						log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+					}
+					// } else {
+					// 	anotherPC(hostname)
+					// }
 				} else {
 					messageText := "Неизвестная команда"
 					err := SendMessage(BotToken, Chat_IDint, messageText)
@@ -896,7 +921,7 @@ func getFromURL(url, cell, IDinCell string) string {
 	// Отправка запроса и получение ответа
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatal("Failed to send request: ", err, getLine())
+		log.Println("Failed to send request: ", err, getLine())
 	}
 	defer resp.Body.Close()
 
@@ -904,7 +929,7 @@ func getFromURL(url, cell, IDinCell string) string {
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, resp.Body)
 	if err != nil {
-		log.Fatal("Failed to write response to buffer: ", err, getLine())
+		log.Println("Failed to write response to buffer: ", err, getLine())
 	}
 
 	responseString := buf.String()
@@ -938,7 +963,7 @@ func getInterface() (localAddr, nameInterface string) {
 			localAddr = localIP
 		}
 	}
-	log.Printf("[INFO] Интерфейс с макс. исх. скоростью: %s, IP: %s, скорость: %f байт/сек\n", maxInterfaceName, localAddr, maxOutgoingSpeed)
+	log.Printf("[INFO] Интерфейс с макс. исх. скоростью: %s, IP: %s, скорость: %.0f байт/сек\n", maxInterfaceName, localAddr, maxOutgoingSpeed)
 	return localAddr, maxInterfaceName
 }
 

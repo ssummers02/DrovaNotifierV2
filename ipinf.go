@@ -52,9 +52,11 @@ func updateGeoLite(mmdbASN, mmdbCity string) {
 
 func downloadAndReplaceFileIfNeeded(url, filename string) int8 {
 	var z int8 = 0
+	time.Sleep(2 * time.Second)
 	resp, err := http.Get("https://api.github.com/repos/P3TERX/GeoLite.mmdb/releases/latest")
 	if err != nil {
 		log.Println("[ERROR] Ошибка: ", err, getLine())
+		restart()
 	}
 	defer resp.Body.Close()
 
