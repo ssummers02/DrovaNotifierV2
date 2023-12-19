@@ -221,10 +221,16 @@ func main() {
 	if checkIfProcessRunning("LibreHardwareMonitor.exe") && CheckTempON {
 		go CheckHWt(hostname) // мониторинг температур
 	} else if !checkIfProcessRunning("LibreHardwareMonitor.exe") && CheckTempON {
-		chatMessage := "LibreHardwareMonitor не запущен. Перезапустите приложение после запуска LibreHardwareMonitor"
+		chatMessage := hostname + ". LibreHardwareMonitor не запущен. Приложение перезапустится после запуска LibreHardwareMonitor"
 		err := SendMessage(BotToken, Chat_IDint, chatMessage)
 		if err != nil {
 			log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+		}
+		for {
+			if checkIfProcessRunning("LibreHardwareMonitor.exe") {
+				restart()
+			}
+			time.Sleep(10 * time.Second)
 		}
 	}
 
