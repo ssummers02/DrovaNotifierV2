@@ -355,3 +355,75 @@ func getTemp(body []byte, xpu string) (value1, value2 string) {
 	}
 	return value1, value2
 }
+
+// func CheckSSDtemp() {
+// 	var body []byte
+// 	// tMessage = ""
+// 	url := "http://localhost:8085/data.json"
+// 	resp, err := http.Get(url)
+// 	if err != nil {
+// 		log.Println(err)
+// 		restart()
+// 	}
+// 	defer resp.Body.Close()
+
+// 	body, err = io.ReadAll(resp.Body)
+// 	if err != nil {
+// 		log.Println(err)
+// 	}
+
+// 	tempSSD1, tempSSD2 := GetTemperatureDisk(body)
+// 	if tempSSD1 != "" {
+// 		fmt.Println("t1 disk = ", tempSSD1)
+// 	}
+// 	if tempSSD2 != "" {
+// 		fmt.Println("t2 disk = ", tempSSD2)
+// 	}
+// }
+
+// func GetTemperatureDisk(body []byte) (value1, value2 string) {
+// 	var root Node
+// 	var text1, text2, text3, text4 string
+// 	err := json.Unmarshal(body, &root)
+// 	if err != nil {
+// 		fmt.Println(err)
+// 	}
+// 	text1 = "images_icon/hdd.png"
+// 	text4 = "Temperatures"
+// 	text2 = "Temperature"
+// 	text3 = "Temperature 2"
+
+// 	value1, value2 = "-1", "-1"
+// 	// Перебор первого уровня
+// 	for _, child := range root.Children {
+// 		// Перебор второго уровня
+// 		for _, subChild := range child.Children {
+// 			// fmt.Println("child.Children - ", subChild.ImageURL)
+// 			if subChild.ImageURL == text1 {
+// 				// Перебор третьего уровня
+// 				for _, subSubChild := range subChild.Children {
+// 					if subSubChild.Text == text4 {
+// 						// Перебор четвертого уровня
+// 						for _, subSubSubChild := range subSubChild.Children {
+// 							if subSubSubChild.Text == text2 {
+// 								if value1 == "" {
+// 									value1 = subSubSubChild.Value
+// 								} else {
+// 									value1 += ", " + subSubSubChild.Value
+// 								}
+// 							}
+// 							if subSubSubChild.Text == text3 {
+// 								if value2 == "" {
+// 									value2 = subSubSubChild.Value
+// 								} else {
+// 									value2 += ", " + subSubSubChild.Value
+// 								}
+// 							}
+// 						}
+// 					}
+// 				}
+// 			}
+// 		}
+// 	}
+// 	return value1, value2
+// }

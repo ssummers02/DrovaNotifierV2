@@ -1,13 +1,46 @@
+// токен бота
 tokenbot = 
+//ID чата получателя
 chatID = 
+// чат для сервисных сообщений, если пустой, используется значение предыдущего параметра
+ServiceChatID = 
+// ID пользователя, от которого принимаются команды
 UserID = 
+// включить команды управления ботом
+CommandON = true
+
 //onlineIpInfo может принимать значение только false или true. false - инфо по IP используя оффлайн базу GeoLite, true - инфо по IP через сайт ipinfo.io
 onlineIpInfo = true
-//onlineIpInfo может принимать значение только false или true. true - проверяем свободное место на дисках, false - не проверяем свободное место на дисках
+// автообновление файлов GeoLite с Github
+AutoUpdateGeolite = true
+
+// Проверять свободное место на дисках
 checkFreeSpace = true
-// проверка наличия файлов EasyAntiCheat.exe и EasyAntiCheat_EOS.exe
+// Проверять наличие файлов EasyAntiCheat.exe и EasyAntiCheat_EOS.exe
 checkAntiCheat = true
-// Для отключение блокировки "хитрых" триальщиков меняем значение на false, для включения - true
+// Мониторить температуры
+CheckTempON = true
+// порог проверки работы вентиляторов видеокарты
+FANt = 75
+// минимальные обороты при FANt
+FANrpm = 900
+// порог температуры процессора
+CPUtmax = 85
+// порог температуры ядра видеокарты
+GPUtmax = 85
+// порог температуры HotSpot видеокарты
+GPUhsTmax = 90
+
+// Блокировка "хитрых" триальщиков. false - нет блокировки
 trialBlock = false
-// включить команды управления ботом. true - включено, false - выключено
-commandON = true
+// сбор статистики по триальщикам в trial.txt. false - не собирается статистика в trial.txt
+TrialON = true
+
+// включение сообщений при начале сессии. false - сообщение не будет приходить
+StartMessageON = true
+// включение о сообщении об окончании сессии. false - сообщение не будет приходить
+StopMessageON = true
+// оповещать о сессиях менее Х минут, выставлять в config.go. false - сообщение не будет приходить
+ShortSessionON = true
+// сообщение с комментарием клиента. false - сообщение не будет приходить
+CommentMessageON = true

@@ -83,7 +83,7 @@ type Win32_OperatingSystem struct {
 
 func main() {
 	time.Sleep(20 * time.Second)
-	BotToken, Chat_IDint, UserID, serviceChatID = getConfigBot()
+	BotToken, Chat_IDint, UserID, ServiceChatID = getConfigBot()
 	logFilePath := "log.log" // Имя файла для логирования ошибок
 	logFilePath = filepath.Join(filepath.Dir(os.Args[0]), logFilePath)
 	// Открываем файл для записи логов
@@ -109,6 +109,15 @@ func main() {
 	mmdbASN = filepath.Join(dir, "GeoLite2-ASN.mmdb")   // файл оффлайн базы IP. Провайдер
 	mmdbCity = filepath.Join(dir, "GeoLite2-City.mmdb") // файл оффлайн базы IP. Город и область
 
+	// Получаем имя ПК
+	hostname, err = os.Hostname()
+	if err != nil {
+		log.Println("[ERROR] Ошибка при получении имени компьютера: ", err, getLine())
+		return
+	}
+
+	getConfigFile(fileConfig)
+
 	if TrialON {
 		if TrialfileLAN != "" {
 			_, err = os.Stat(TrialfileLAN)
@@ -129,61 +138,7 @@ func main() {
 		TrialBlock = false
 		TrialfileLAN = ""
 	}
-	// Получаем имя ПК
-	hostname, err = os.Hostname()
-	if err != nil {
-		log.Println("[ERROR] Ошибка при получении имени компьютера: ", err, getLine())
-		return
-	}
 
-	//блок для получения данных из конфига
-	_, err = os.Stat(fileConfig)
-	if os.IsNotExist(err) {
-		// Файл не существует
-		log.Printf("[INFO] Файл %s отсутствует\n", fileConfig)
-	} else {
-		bToken, err := readConfig("tokenbot", fileConfig) // определяем токен бота
-		if err != nil {
-			log.Printf("[ERROR] Ошибка - %s. %s\n", err, getLine())
-		}
-		if bToken != "" {
-			BotToken = bToken // получаем токен этого бота
-		}
-		Chat_ID, err := readConfig("chatID", fileConfig) // определяем ID чата
-		if err != nil {
-			log.Printf("[ERROR] Ошибка - %s. %s\n", err, getLine())
-		}
-		if Chat_ID != "" {
-			Chat_IDint, err = strconv.ParseInt(Chat_ID, 10, 64) // конвертируем ID чата в int64
-			if err != nil {
-				log.Println("Error: ", err, getLine())
-			}
-		}
-		UsrID, err := readConfig("UserID", fileConfig) // определяем ID пользователя
-		if err != nil {
-			log.Printf("[ERROR] Ошибка - %s. %s\n", err, getLine())
-		}
-		if UsrID != "" {
-			UserID, err = strconv.ParseInt(UsrID, 10, 64) // конвертируем ID чата в int64
-			if err != nil {
-				log.Println("Error: ", err, getLine())
-			}
-		}
-
-		OnlineIpInfo = takeBoolean("onlineIpInfo")     // настройки получения инфо по IP
-		CheckFreeSpace = takeBoolean("checkFreeSpace") // проверка свободного места на дисках
-		CheckAntiCheat = takeBoolean("checkAntiCheat") // проверка папок античитов
-		CommandON = takeBoolean("commandON")           // управление ботом через чат ТГ
-		TrialON = takeBoolean("TrialON")               // статистика по триалу
-		if TrialON {
-			TrialBlock = takeBoolean("trialBlock")                     // блокировка триальщиков
-			TrialfileLAN, err = readConfig("TrialfileLAN", fileConfig) // определяем токен бота
-			if err != nil {
-				log.Printf("[ERROR] Ошибка - %s. %s\n", err, getLine())
-			}
-		}
-
-	}
 	if !OnlineIpInfo {
 		_, err = os.Stat(mmdbASN)
 		if os.IsNotExist(err) {
@@ -410,8 +365,7 @@ func dur(stopTime, startTime time.Time) (string, int) {
 			sessionDur = sessionDur + sec
 		}
 		if !ShortSessionON {
-			m := minMinute()
-			if hours == 0 && minutes < m {
+			if hours == 0 && minutes < minMinute {
 				sessionDur = "off"
 			}
 		}
@@ -577,8 +531,8 @@ func messageStartWin(hostname string) {
 	// Если прошло менее 5 минут с момента запуска Windows
 	if duration.Minutes() < 5 {
 		message := fmt.Sprintf("Внимание! Станция %s запущена менее 5 минут назад!\nВремя запуска - %s", hostname, formattedTime)
-		if serviceChatID != 0 {
-			err := SendMessage(BotToken, serviceChatID, message)
+		if ServiceChatID != 0 {
+			err := SendMessage(BotToken, ServiceChatID, message)
 			if err != nil {
 				log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
 			}
@@ -616,9 +570,9 @@ func diskSpace(hostname string, checkFreeSpace bool) {
 
 		// Если text не пустой, значит есть диск со свободным местом менее 10%, отправляем сообщение
 		if text != "" {
-			if serviceChatID != 0 {
+			if ServiceChatID != 0 {
 				message := fmt.Sprintf("Внимание! Станция %s\n%s", hostname, text)
-				err := SendMessage(BotToken, serviceChatID, message)
+				err := SendMessage(BotToken, ServiceChatID, message)
 				if err != nil {
 					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
 				}
@@ -647,8 +601,8 @@ func antiCheat(hostname string, checkAntiCheat bool) {
 			} else if os.IsNotExist(err) {
 				log.Printf("[INFO] Внимание! Станция %s\nОтсутствует файл %s", hostname, key)
 				message := fmt.Sprintf("[INFO] Внимание! Станция %s\nОтсутствует файл %s", hostname, key)
-				if serviceChatID != 0 {
-					err := SendMessage(BotToken, serviceChatID, message)
+				if ServiceChatID != 0 {
+					err := SendMessage(BotToken, ServiceChatID, message)
 					if err != nil {
 						log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
 					}
@@ -764,21 +718,6 @@ func readConfig(keys, filename string) (string, error) {
 		gname = value
 	}
 	return gname, err
-}
-
-// получение данны из файла конфига
-func takeBoolean(key string) (value bool) {
-	check, err := readConfig(key, fileConfig)
-	if err != nil {
-		log.Printf("[ERROR] Ошибка - %s. %s\n", err, getLine())
-	}
-	if check == "true" {
-		value = true
-	} else if check == "false" {
-		value = false
-
-	}
-	return
 }
 
 // перезагрузка ПК
@@ -1008,8 +947,8 @@ func esmeCheck(hostname string) {
 
 		if !checkIfProcessRunning("esme.exe") || (serv[y].Status == "OFFLINE" && serv[y].Public) { // если сервис не запущен
 			chatMessage := fmt.Sprintf("ВНИМАНИЕ! Станции %s offline", hostname) // формируем сообщение
-			if serviceChatID != 0 {
-				err := SendMessage(BotToken, serviceChatID, chatMessage) // отправка сообщения
+			if ServiceChatID != 0 {
+				err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
 				if err != nil {
 					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
 				}
