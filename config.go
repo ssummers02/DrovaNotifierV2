@@ -13,8 +13,8 @@ var ( // true - включение функции, false - выключение
 	ServiceChatID int64         // чат для сервисных сообщений
 	CommandON     bool   = true // включить команды управления ботом
 
-	OnlineIpInfo      bool = true // инфо по IP online
-	AutoUpdateGeolite bool = true // автообновление файлов GeoLite с Github
+	OnlineIpInfo      bool = false // инфо по IP online
+	AutoUpdateGeolite bool = true  // автообновление файлов GeoLite с Github
 
 	CheckAntiCheat bool    = true // проверка наличия файлов EasyAntiCheat.exe и EasyAntiCheat_EOS.exe
 	CheckFreeSpace bool    = true // проверка свободного места на дисках
@@ -26,9 +26,9 @@ var ( // true - включение функции, false - выключение
 	GPUhsTmax      float64 = 90   // порог температуры HotSpot видеокарты
 	DeltaT         float64 = 5    // дельта среднего значения температур от от порога предупреждения. Для сообщения о нормализации температур
 
-	TrialON      bool   = false // сбор статистики по триальщикам в trial.txt. false - не собирается статистика в trial.txt
-	TrialBlock   bool   = false // Блокировка "хитрых" триальщиков. false - нет блокировки
-	TrialfileLAN string = ``    // файл в сети пример `S:\trial.txt`
+	TrialON      bool   = true // сбор статистики по триальщикам в trial.txt. false - не собирается статистика в trial.txt
+	TrialBlock   bool   = true // Блокировка "хитрых" триальщиков. false - нет блокировки
+	TrialfileLAN string = ``   // файл в сети пример `S:\trial.txt`
 
 	StartMessageON   bool = true // включение сообщений при начале сессии. false - сообщение не будет приходить
 	StopMessageON    bool = true // включение о сообщении об окончании сессии. false - сообщение не будет приходить
@@ -38,10 +38,10 @@ var ( // true - включение функции, false - выключение
 )
 
 func getConfigBot() (BotToken string, Chat_IDint, UserID, serviceChatID int64) {
-	BotToken = "34355345:sdfasdasd" // "enter_your_bot_toket"
-	Chat_IDint = 34355345           // чат, куда будут приходить информация
-	UserID = 34355345               // пользователь, от которого будут приниматься команды
-	ServiceChatID = 0               // чат для сервисных сообщений, 0 - отправка в Chat_IDint
+	BotToken = "12111111:xxxxxxxsdcsd" // "enter_your_bot_toket"
+	Chat_IDint = 222222                // чат, куда будут приходить информация
+	UserID = 22222                     // пользователь, от которого будут приниматься команды
+	ServiceChatID = 0                  // чат для сервисных сообщений, 0 - отправка в Chat_IDint
 	return BotToken, Chat_IDint, UserID, serviceChatID
 }
 
@@ -53,7 +53,7 @@ func getConfigFile(fileConfig string) {
 		log.Printf("[INFO] Файл %s отсутствует\n", fileConfig)
 	} else {
 
-		bToken, err := readConfig("tokenbot", fileConfig) // определяем токен бота
+		bToken, err := readConfig("Tokenbot", fileConfig) // определяем токен бота
 		if err != nil {
 			log.Printf("[ERROR] Ошибка - %s. %s\n", err, getLine())
 		}
@@ -61,7 +61,7 @@ func getConfigFile(fileConfig string) {
 			BotToken = bToken // получаем токен этого бота
 		}
 
-		ChatIDint := takeConfInt("chatID", fileConfig)
+		ChatIDint := takeConfInt("ChatID", fileConfig)
 		if ChatIDint != 0 {
 			Chat_IDint = ChatIDint
 		}
@@ -76,42 +76,108 @@ func getConfigFile(fileConfig string) {
 			UserID = UID
 		}
 
-		OnlineIpInfo = takeConfBool("onlineIpInfo") // настройки получения инфо по IP
+		var chk bool
+
+		_, chk = takeConfBool("OnlineIpInfo") // настройки получения инфо по IP
+		if chk {
+			OnlineIpInfo, _ = takeConfBool("OnlineIpInfo")
+		}
 		log.Println("OnlineIpInfo - ", OnlineIpInfo)
-		CheckFreeSpace = takeConfBool("checkFreeSpace") // проверка свободного места на дисках
+
+		_, chk = takeConfBool("CheckFreeSpace") // проверка свободного места на дисках
+		if chk {
+			OnlineIpInfo, _ = takeConfBool("CheckFreeSpace")
+		}
 		log.Println("CheckFreeSpace - ", CheckFreeSpace)
-		CheckAntiCheat = takeConfBool("checkAntiCheat") // проверка папок античитов
+
+		_, chk = takeConfBool("CheckAntiCheat") // проверка папок античитов
+		if chk {
+			CheckAntiCheat, _ = takeConfBool("CheckAntiCheat")
+		}
 		log.Println("CheckAntiCheat - ", CheckAntiCheat)
-		CommandON = takeConfBool("CommandON") // управление ботом через чат ТГ
+
+		_, chk = takeConfBool("CommandON") // управление ботом через чат ТГ
+		if chk {
+			CommandON, _ = takeConfBool("CommandON")
+		}
 		log.Println("CommandON - ", CommandON)
-		StartMessageON = takeConfBool("StartMessageON") // включить сообщения о начале сессии
+
+		_, chk = takeConfBool("StartMessageON") // сообщения о начале сессии
+		if chk {
+			StartMessageON, _ = takeConfBool("StartMessageON")
+		}
 		log.Println("StartMessageON - ", StartMessageON)
-		StopMessageON = takeConfBool("StopMessageON") // включить сообщения об окончании сессии
+
+		_, chk = takeConfBool("StopMessageON") // сообщения об окончании сессии
+		if chk {
+			StopMessageON, _ = takeConfBool("StopMessageON")
+		}
 		log.Println("StopMessageON - ", StopMessageON)
-		ShortSessionON = takeConfBool("ShortSessionON") // включить короткие сообщения
+
+		_, chk = takeConfBool("ShortSessionON") // короткие сообщения
+		if chk {
+			ShortSessionON, _ = takeConfBool("ShortSessionON")
+		}
 		log.Println("ShortSessionON - ", ShortSessionON)
-		CommentMessageON = takeConfBool("CommentMessageON") // включить комментарии
+
+		_, chk = takeConfBool("CommentMessageON") // включить комментарии
+		if chk {
+			CommentMessageON, _ = takeConfBool("CommentMessageON")
+		}
 		log.Println("CommentMessageON - ", CommentMessageON)
 
-		CheckTempON = takeConfBool("CheckTempON") // мониторинг температур
+		_, chk = takeConfBool("CheckTempON") // включить комментарии
+		if chk {
+			CheckTempON, _ = takeConfBool("CheckTempON")
+		}
 		log.Println("CheckTempON - ", CheckTempON)
+
 		if CheckTempON {
-			FANt = takeConfFloat("FANt", fileConfig) // порог проверки работы вентиляторов видеокарты
+			var chkF float64 = 0
+			chkF = takeConfFloat("FANt", fileConfig) // порог проверки работы вентиляторов видеокарты
+			if chkF != 0 {
+				FANt = chkF
+			}
 			log.Println("FANt - ", FANt)
-			FANrpm = takeConfFloat("FANrpm", fileConfig) // минимальные обороты при FANt
+
+			chkF = takeConfFloat("FANrpm", fileConfig) // минимальные обороты при FANt
+			if chkF != 0 {
+				FANrpm = chkF
+			}
 			log.Println("FANrpm - ", FANrpm)
-			CPUtmax = takeConfFloat("CPUtmax", fileConfig) // порог температуры процессора
+
+			chkF = takeConfFloat("CPUtmax", fileConfig) // порог температуры процессора
+			if chkF != 0 {
+				CPUtmax = chkF
+			}
 			log.Println("CPUtmax - ", CPUtmax)
-			GPUtmax = takeConfFloat("GPUtmax", fileConfig) // порог температуры ядра видеокарты
+
+			chkF = takeConfFloat("GPUtmax", fileConfig) // порог температуры ядра видеокарты
+			if chkF != 0 {
+				GPUtmax = chkF
+			}
 			log.Println("GPUtmax - ", GPUtmax)
-			GPUhsTmax = takeConfFloat("GPUhsTmax", fileConfig) // порог температуры HotSpot видеокарты
+
+			chkF = takeConfFloat("GPUhsTmax", fileConfig) // порог температуры HotSpot видеокарты
+			if chkF != 0 {
+				GPUhsTmax = chkF
+			}
 			log.Println("GPUhsTmax - ", GPUhsTmax)
 		}
 
-		TrialON = takeConfBool("TrialON") // вести статистику триала
+		_, chk = takeConfBool("TrialON") // включить комментарии
+		if chk {
+			TrialON, _ = takeConfBool("TrialON")
+		}
+		log.Println("TrialON - ", TrialON) // вести статистику триала
 
 		if TrialON {
-			TrialBlock = takeConfBool("trialBlock")                    // блокировка триальщиков
+			_, chk = takeConfBool("TrialBlock") // включить комментарии
+			if chk {
+				TrialBlock, _ = takeConfBool("TrialBlock")
+			}
+			log.Println("TrialBlock -", TrialBlock) // блокировка триальщиков
+
 			TrialfileLAN, err = readConfig("TrialfileLAN", fileConfig) // определяем токен бота
 			if err != nil {
 				log.Printf("[ERROR] Ошибка - %s. %s\n", err, getLine())
@@ -135,15 +201,19 @@ func takeConfInt(param, file string) (paramInt int64) {
 }
 
 // получение данны из файла конфига
-func takeConfBool(key string) (value bool) {
+func takeConfBool(key string) (value, chk bool) {
 	check, err := readConfig(key, fileConfig)
 	if err != nil {
 		log.Printf("[ERROR] Ошибка - %s. %s\n", err, getLine())
 	}
 	if check == "true" {
 		value = true
-	} else {
+		chk = true
+	} else if check == "false" {
 		value = false
+		chk = true
+	} else {
+		chk = false
 	}
 	return
 }

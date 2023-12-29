@@ -1,7 +1,7 @@
 // токен бота
-tokenbot = 
+Tokenbot = 
 //ID чата получателя
-chatID = 
+ChatID = 
 // чат для сервисных сообщений, если пустой, используется значение предыдущего параметра
 ServiceChatID = 
 // ID пользователя, от которого принимаются команды
@@ -10,14 +10,14 @@ UserID =
 CommandON = true
 
 //onlineIpInfo может принимать значение только false или true. false - инфо по IP используя оффлайн базу GeoLite, true - инфо по IP через сайт ipinfo.io
-onlineIpInfo = true
+OnlineIpInfo = true
 // автообновление файлов GeoLite с Github
 AutoUpdateGeolite = true
 
 // Проверять свободное место на дисках
-checkFreeSpace = true
+CheckFreeSpace = true
 // Проверять наличие файлов EasyAntiCheat.exe и EasyAntiCheat_EOS.exe
-checkAntiCheat = true
+CheckAntiCheat = true
 // Мониторить температуры
 CheckTempON = true
 // порог проверки работы вентиляторов видеокарты
@@ -32,7 +32,7 @@ GPUtmax = 85
 GPUhsTmax = 90
 
 // Блокировка "хитрых" триальщиков. false - нет блокировки
-trialBlock = false
+TrialBlock = false
 // сбор статистики по триальщикам в trial.txt. false - не собирается статистика в trial.txt
 TrialON = true
 
