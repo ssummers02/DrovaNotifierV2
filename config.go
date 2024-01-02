@@ -20,7 +20,7 @@ var ( // true - включение функции, false - выключение
 	CheckFreeSpace bool    = true // проверка свободного места на дисках
 	CheckTempON    bool    = true // мониторинг температур
 	FANt           float64 = 75   // порог проверки работы вентиляторов видеокарты
-	FANrpm         float64 = 1000 // минимальные обороты при FANt
+	FANrpm         float64 = 800  // минимальные обороты при FANt
 	CPUtmax        float64 = 85   // порог температуры процессора
 	GPUtmax        float64 = 85   // порог температуры ядра видеокарты
 	GPUhsTmax      float64 = 90   // порог температуры HotSpot видеокарты
@@ -38,10 +38,10 @@ var ( // true - включение функции, false - выключение
 )
 
 func getConfigBot() (BotToken string, Chat_IDint, UserID, serviceChatID int64) {
-	BotToken = "12111111:xxxxxxxsdcsd" // "enter_your_bot_toket"
-	Chat_IDint = 222222                // чат, куда будут приходить информация
-	UserID = 22222                     // пользователь, от которого будут приниматься команды
-	ServiceChatID = 0                  // чат для сервисных сообщений, 0 - отправка в Chat_IDint
+	BotToken = "213123:serwerw324wef" // "enter_your_bot_toket"
+	Chat_IDint = 123213               // чат, куда будут приходить информация
+	UserID = 123213                   // пользователь, от которого будут приниматься команды
+	ServiceChatID = 0                 // чат для сервисных сообщений, 0 - отправка в Chat_IDint
 	return BotToken, Chat_IDint, UserID, serviceChatID
 }
 

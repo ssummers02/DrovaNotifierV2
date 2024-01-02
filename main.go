@@ -84,6 +84,9 @@ type Win32_OperatingSystem struct {
 func main() {
 	time.Sleep(20 * time.Second)
 	BotToken, Chat_IDint, UserID, ServiceChatID = getConfigBot()
+	if ServiceChatID == 0 {
+		ServiceChatID = Chat_IDint
+	}
 	logFilePath := "log.log" // Имя файла для логирования ошибок
 	logFilePath = filepath.Join(filepath.Dir(os.Args[0]), logFilePath)
 	// Открываем файл для записи логов
@@ -197,7 +200,6 @@ func main() {
 
 	for {
 		for i := 0; i != 2; { //ждем запуска приложения ese.exe
-			time.Sleep(5 * time.Second)                  // интервал проверки запущенного процесса
 			isRunning = checkIfProcessRunning("ese.exe") // запущено ли приложение
 			if isRunning {
 				log.Println("[INFO] Старт сессии")
@@ -210,6 +212,7 @@ func main() {
 				}
 				i = 2 //т.к. приложение запущено, выходим из цикла
 			}
+			time.Sleep(5 * time.Second) // интервал проверки запущенного процесса
 		}
 		// ждем закрытия процесса ese.exe
 		for i := 0; i != 3; {
@@ -284,16 +287,16 @@ func getLine() string {
 // получение списка игр с их ID
 func gameID(fileGames string) {
 	// Отправить GET-запрос на API
-	resp, err := http.Get("https://services.drova.io/product-manager/product/listfull2")
+	respGame, err := http.Get("https://services.drova.io/product-manager/product/listfull2")
 	if err != nil {
 		fmt.Println("[ERROR] Ошибка при выполнении запроса:", err, getLine())
 		return
 	}
-	defer resp.Body.Close()
+	defer respGame.Body.Close()
 
 	// Прочитать JSON-ответ
 	var products []Product
-	err = json.NewDecoder(resp.Body).Decode(&products)
+	err = json.NewDecoder(respGame.Body).Decode(&products)
 	if err != nil {
 		fmt.Println("[ERROR] Ошибка при разборе JSON-ответа:", err, getLine())
 		return
@@ -531,16 +534,9 @@ func messageStartWin(hostname string) {
 	// Если прошло менее 5 минут с момента запуска Windows
 	if duration.Minutes() < 5 {
 		message := fmt.Sprintf("Внимание! Станция %s запущена менее 5 минут назад!\nВремя запуска - %s", hostname, formattedTime)
-		if ServiceChatID != 0 {
-			err := SendMessage(BotToken, ServiceChatID, message)
-			if err != nil {
-				log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
-			}
-		} else {
-			err := SendMessage(BotToken, Chat_IDint, message)
-			if err != nil {
-				log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
-			}
+		err := SendMessage(BotToken, ServiceChatID, message)
+		if err != nil {
+			log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
 		}
 	}
 }
@@ -562,26 +558,19 @@ func diskSpace(hostname string, checkFreeSpace bool) {
 			}
 
 			usedSpacePercent := usageStat.UsedPercent
-
+			freeSpace := float32(usageStat.Free) / (1024 * 1024 * 1024)
 			if usedSpacePercent > 90 {
-				text += fmt.Sprintf("На диске %s свободного места менее 10%%\n", partition.Mountpoint)
+				text += fmt.Sprintf("На диске %s свободно менее 10%%, %.2f Гб\n", partition.Mountpoint, freeSpace)
 			}
 		}
 
 		// Если text не пустой, значит есть диск со свободным местом менее 10%, отправляем сообщение
 		if text != "" {
-			if ServiceChatID != 0 {
-				message := fmt.Sprintf("Внимание! Станция %s\n%s", hostname, text)
-				err := SendMessage(BotToken, ServiceChatID, message)
-				if err != nil {
-					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
-				}
-			} else {
-				message := fmt.Sprintf("Внимание! Станция %s\n%s", hostname, text)
-				err := SendMessage(BotToken, Chat_IDint, message)
-				if err != nil {
-					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
-				}
+			message := fmt.Sprintf("Внимание! Станция %s\n%s", hostname, text)
+			log.Print(text)
+			err := SendMessage(BotToken, ServiceChatID, message)
+			if err != nil {
+				log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
 			}
 		}
 	}
@@ -601,16 +590,10 @@ func antiCheat(hostname string, checkAntiCheat bool) {
 			} else if os.IsNotExist(err) {
 				log.Printf("[INFO] Внимание! Станция %s\nОтсутствует файл %s", hostname, key)
 				message := fmt.Sprintf("[INFO] Внимание! Станция %s\nОтсутствует файл %s", hostname, key)
-				if ServiceChatID != 0 {
-					err := SendMessage(BotToken, ServiceChatID, message)
-					if err != nil {
-						log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
-					}
-				} else {
-					err := SendMessage(BotToken, Chat_IDint, message)
-					if err != nil {
-						log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
-					}
+				err := SendMessage(BotToken, ServiceChatID, message)
+				if err != nil {
+					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+					return
 				}
 			} else {
 				log.Printf("[ERROR] Ошибка проверки файла %s: %s. %s\n", filePath, err, getLine())
@@ -676,13 +659,15 @@ func readDataFromFile() []string {
 func writeDataToFile(data []string) {
 	file, err := os.OpenFile(trialfile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		panic(err)
+		log.Println(err)
+		return
 	}
 	defer file.Close()
 
 	for _, line := range data {
 		if _, err := file.WriteString(line + "\n"); err != nil {
-			panic(err)
+			log.Println(err)
+			return
 		}
 	}
 }
@@ -726,6 +711,7 @@ func rebootPC() {
 	err := cmd.Run()
 	if err != nil {
 		log.Println(err)
+		return
 	}
 }
 
@@ -762,40 +748,61 @@ func commandBot(tokenBot, hostname string, userID int64) {
 						err := SendMessage(BotToken, Chat_IDint, message)
 						if err != nil {
 							log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+							return
 						}
 						rebootPC()
 					} else {
 						anotherPC(hostname)
 					}
 				} else if strings.Contains(message, "/status") {
-					var serv serverManager                                                       // структура serverManager
-					json.Unmarshal([]byte(getFromURL(UrlServers, "server_id", serverID)), &serv) // декодируем JSON файл
-
-					var serverName, status, messageText string
-
-					i := 0
-					messageText = fmt.Sprintf("%s\n", hostname)
-					for range serv {
-						var sessionStart, server_ID string
-						serverName = serv[i].Name
-						status = serv[i].Status // Получаем статус сервера
-						server_ID = serv[i].Server_id
-
-						if status == "BUSY" || status == "HANDSHAKE" { // Получаем время начала, если станция занят
-							var data SessionsData                                                          // структура SessionsData
-							json.Unmarshal([]byte(getFromURL(UrlSessions, "server_id", server_ID)), &data) // декодируем JSON файл
-							startTime, _ := dateTimeS(data.Sessions[0].Created_on)
-							sessionStart = fmt.Sprintf("\n%s", startTime)
-						} else {
-							sessionStart = ""
-						}
-						messageText += fmt.Sprintf("%s - %s%s\n", serverName, status, sessionStart)
-						i++
-					}
-
-					err := SendMessage(BotToken, Chat_IDint, messageText)
+					var serv serverManager // структура serverManager
+					responseData, err := getFromURL(UrlSessions, "server_id", serverID)
 					if err != nil {
-						log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+						chatMessage := hostname + "Невозможно получить данные с сайта"
+						err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
+						if err != nil {
+							log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+						}
+					} else {
+						json.Unmarshal([]byte(responseData), &serv) // декодируем JSON файл
+
+						var serverName, status, messageText string
+
+						i := 0
+						messageText = fmt.Sprintf("%s\n", hostname)
+						for range serv {
+							var sessionStart, server_ID string
+							serverName = serv[i].Name
+							status = serv[i].Status // Получаем статус сервера
+							server_ID = serv[i].Server_id
+
+							if status == "BUSY" || status == "HANDSHAKE" { // Получаем время начала, если станция занят
+								var data SessionsData // структура SessionsData
+								responseData, err := getFromURL(UrlSessions, "server_id", server_ID)
+								if err != nil {
+									chatMessage := hostname + "Невозможно получить данные с сайта"
+									err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
+									if err != nil {
+										log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+									}
+									sessionStart = ""
+								} else {
+									json.Unmarshal([]byte(responseData), &data) // декодируем JSON файл
+									startTime, _ := dateTimeS(data.Sessions[0].Created_on)
+									sessionStart = fmt.Sprintf("\n%s", startTime)
+								}
+							} else {
+								sessionStart = ""
+							}
+							messageText += fmt.Sprintf("%s - %s%s\n", serverName, status, sessionStart)
+							i++
+						}
+
+						err := SendMessage(BotToken, Chat_IDint, messageText)
+						if err != nil {
+							log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+							return
+						}
 					}
 				} else if strings.Contains(message, "/visible") {
 					if strings.Contains(message, hname) { // Проверяем, что в тексте упоминается имя ПК
@@ -805,6 +812,7 @@ func commandBot(tokenBot, hostname string, userID int64) {
 						err := SendMessage(BotToken, Chat_IDint, message)
 						if err != nil {
 							log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+							return
 						}
 					} else {
 						anotherPC(hostname)
@@ -817,6 +825,7 @@ func commandBot(tokenBot, hostname string, userID int64) {
 						err := SendMessage(BotToken, Chat_IDint, message)
 						if err != nil {
 							log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+							return
 						}
 					} else {
 						anotherPC(hostname)
@@ -830,15 +839,14 @@ func commandBot(tokenBot, hostname string, userID int64) {
 					err := SendMessage(BotToken, Chat_IDint, message)
 					if err != nil {
 						log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+						return
 					}
-					// } else {
-					// 	anotherPC(hostname)
-					// }
 				} else {
 					messageText := "Неизвестная команда"
 					err := SendMessage(BotToken, Chat_IDint, messageText)
 					if err != nil {
 						log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+						return
 					}
 				}
 			}
@@ -847,14 +855,16 @@ func commandBot(tokenBot, hostname string, userID int64) {
 	}
 }
 
-func getFromURL(url, cell, IDinCell string) string {
+func getFromURL(url, cell, IDinCell string) (string, error) {
 	// Создание HTTP клиента
 	client := &http.Client{}
 
-	// Создание нового GET-запроса
+	var resp *http.Response
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		log.Println("Failed to create request: ", err, getLine())
+		log.Println("Ошибка создания запроса: ", err, getLine())
+		return "", err
 	}
 
 	// Установка параметров запроса
@@ -866,21 +876,22 @@ func getFromURL(url, cell, IDinCell string) string {
 	req.Header.Set("X-Auth-Token", authToken)
 
 	// Отправка запроса и получение ответа
-	resp, err := client.Do(req)
+	resp, err = client.Do(req)
 	if err != nil {
-		log.Println("Failed to send request: ", err, getLine())
+		log.Println("Ошибка отправки запроса: ", err, getLine())
+		return "", err
 	}
 	defer resp.Body.Close()
-
 	// Запись ответа в строку
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, resp.Body)
 	if err != nil {
-		log.Println("Failed to write response to buffer: ", err, getLine())
+		log.Println("Ошибка записи запроса в буффер: ", err, getLine())
+		return "", err
 	}
 
 	responseString := buf.String()
-	return responseString
+	return responseString, err
 }
 
 // получаем IP интерфейса с наибольшей скоростью исходящего трафика
@@ -929,39 +940,38 @@ func esmeCheck(hostname string) {
 			time.Sleep(60 * time.Minute) // интервал проверки
 		}
 
-		responseString := getFromURL(UrlServers, "uuid", serverID)
-		var serv serverManager                        // структура serverManager
-		json.Unmarshal([]byte(responseString), &serv) // декодируем JSON файл
-
-		var x, y int8 = 0, 0
-
-		for range serv {
-			if serv[x].Server_id == serverID {
-				y = x
+		responseString, err := getFromURL(UrlServers, "uuid", serverID)
+		if err != nil {
+			chatMessage := hostname + "Невозможно получить данные с сайта"
+			log.Println("[ERROR] Невозможно получить данные с сайта")
+			err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
+			if err != nil {
+				log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
 			}
-			x++
-		}
-		// serverStatus := serv[y].Status
-		// publ := serv[y].Public
-		// log.Printf("serverStatus = %s, publ = %t\n, serverID = %s", serverStatus, publ, serv[y].Server_id)
-
-		if !checkIfProcessRunning("esme.exe") || (serv[y].Status == "OFFLINE" && serv[y].Public) { // если сервис не запущен
-			chatMessage := fmt.Sprintf("ВНИМАНИЕ! Станции %s offline", hostname) // формируем сообщение
-			if ServiceChatID != 0 {
-				err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
-				if err != nil {
-					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
-				}
-			} else {
-				err := SendMessage(BotToken, Chat_IDint, chatMessage) // отправка сообщения
-				if err != nil {
-					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
-				}
-			}
-			log.Printf("[INFO] Станции %s offline\n", hostname) // записываем в лог
-			i++                                                 // ведем счет отправленных сообщений
 		} else {
-			i, y = 0, 0
+			var serv serverManager                        // структура serverManager
+			json.Unmarshal([]byte(responseString), &serv) // декодируем JSON файл
+
+			var x, y int8 = 0, 0
+
+			for range serv {
+				if serv[x].Server_id == serverID {
+					y = x
+				}
+				x++
+			}
+
+			if !checkIfProcessRunning("esme.exe") || (serv[y].Status == "OFFLINE" && serv[y].Public) { // если сервис не запущен
+				chatMessage := fmt.Sprintf("ВНИМАНИЕ! Станции %s offline", hostname) // формируем сообщение
+				err := SendMessage(BotToken, ServiceChatID, chatMessage)             // отправка сообщения
+				if err != nil {
+					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+				}
+				log.Printf("[INFO] Станции %s offline\n", hostname) // записываем в лог
+				i++                                                 // ведем счет отправленных сообщений
+			} else {
+				i, y = 0, 0
+			}
 		}
 	}
 }

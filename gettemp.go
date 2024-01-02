@@ -172,15 +172,15 @@ func CheckHWt(hostname string) {
 func GetTemperature() (tCPU, tGPU, tGPUhs, fan1, fanp1, fan2, fanp2 float64, tMessage string) {
 	var body []byte
 	tMessage = ""
-	url := "http://localhost:8085/data.json"
-	resp, err := http.Get(url)
+	urlLHM := "http://localhost:8085/data.json"
+	respLHM, err := http.Get(urlLHM)
 	if err != nil {
 		log.Println(err)
 		restart()
 	}
-	defer resp.Body.Close()
+	defer respLHM.Body.Close()
 
-	body, err = io.ReadAll(resp.Body)
+	body, err = io.ReadAll(respLHM.Body)
 	if err != nil {
 		log.Println(err)
 	}
@@ -359,15 +359,15 @@ func getTemp(body []byte, xpu string) (value1, value2 string) {
 // func CheckSSDtemp() {
 // 	var body []byte
 // 	// tMessage = ""
-// 	url := "http://localhost:8085/data.json"
-// 	resp, err := http.Get(url)
+// 	urlLHM := "http://localhost:8085/data.json"
+// 	respLHM, err := http.Get(urlLHM)
 // 	if err != nil {
 // 		log.Println(err)
 // 		restart()
 // 	}
-// 	defer resp.Body.Close()
+// 	defer respLHM.Body.Close()
 
-// 	body, err = io.ReadAll(resp.Body)
+// 	body, err = io.ReadAll(respLHM.Body)
 // 	if err != nil {
 // 		log.Println(err)
 // 	}
