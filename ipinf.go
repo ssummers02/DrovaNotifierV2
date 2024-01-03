@@ -145,6 +145,19 @@ func onlineDBip(ip string) string {
 		log.Println(err, getLine())
 	}
 
-	text := " - " + ipInfo.City + " - " + ipInfo.Region + " - " + ipInfo.ISP
+	var city, region, isp string = "", "", ""
+	if ipInfo.City != "" {
+		city = " - " + ipInfo.City
+	}
+
+	if ipInfo.Region != "" {
+		region = " - " + ipInfo.Region
+	}
+
+	if ipInfo.ISP != "" {
+		isp = " - " + ipInfo.ISP
+	}
+
+	text := city + region + isp
 	return text
 }

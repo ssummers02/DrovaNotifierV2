@@ -33,12 +33,8 @@ func sessionInfo(status string) (infoString string) {
 	if status == "Start" { // формируем текст для отправки
 		responseString, err := getFromURL(UrlSessions, "server_id", serverID)
 		if err != nil {
-			chatMessage := hostname + "Невозможно получить данные с сайта"
+			infoString = hostname + " Невозможно получить данные с сайта"
 			log.Println("[ERROR] Невозможно получить данные с сайта")
-			err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
-			if err != nil {
-				log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
-			}
 		} else {
 			var data SessionsData                         // структура SessionsData
 			json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
@@ -92,83 +88,78 @@ func sessionInfo(status string) (infoString string) {
 			infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + ipInfo + "\n" + sessionOn + " - " + billing + serverIP
 		}
 	} else if status == "Stop" { // высчитываем продолжительность сессии и формируем текст для отправки
-		// responseString := getFromURL(UrlSessions, "uuid", Session_ID)
-
-		// var data SessionsData // структура SessionsData
-		// json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
-
 		var minute int
 		var sessionDur string
 		var stopTime, startTime time.Time
-		var dataS SessionsData
 
 		session_ID := Session_ID
-		// log.Printf("[INFO] Отключение %s\n", data.Sessions[0].Creator_ip)
+
 		for i := 0; i < 12; i++ {
 			responseString, err := getFromURL(UrlSessions, "uuid", session_ID)
 			if err != nil {
-				chatMessage := hostname + "Невозможно получить данные с сайта"
-				log.Println("[ERROR] Невозможно получить данные с сайта")
-				err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
-				if err != nil {
-					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
-				}
+				log.Println("[ERROR] Stop. Невозможно получить данные с сайта")
 			} else {
-				json.Unmarshal([]byte(responseString), &dataS) // декодируем JSON файл
-				test := dataS.Sessions[0].Finished_on
+				var data SessionsData
+				json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
+				test := data.Sessions[0].Finished_on
 				if test == 0 {
 					time.Sleep(5 * time.Second)
-					text := fmt.Sprintf("stopTime = %d", dataS.Sessions[0].Finished_on)
+					text := fmt.Sprintf("stopTime = %d", data.Sessions[0].Finished_on)
 					sessionDur = text
 				} else {
-					_, stopTime = dateTimeS(dataS.Sessions[0].Finished_on)
-					_, startTime = dateTimeS(dataS.Sessions[0].Created_on)
+					_, stopTime = dateTimeS(data.Sessions[0].Finished_on)
+					_, startTime = dateTimeS(data.Sessions[0].Created_on)
 					sessionDur, minute = dur(stopTime, startTime)
 					i = 12
 				}
 			}
 		}
 
-		// json.Unmarshal([]byte(responseString), &data) // декодируем JSON файл
-		log.Printf("[INFO] Отключение %s\n", dataS.Sessions[0].Creator_ip)
-		game, _ := readConfig(dataS.Sessions[0].Product_id, fileGames)
-		billing := dataS.Sessions[0].Billing_type
-		if sessionDur != "off" {
-			var billingTrial string = ""
-			if TrialON {
-				if billing == "trial" {
-					sumTrial = getValueByKey(dataS.Sessions[0].Creator_ip)
-					if sumTrial < 20 || !TrialBlock {
-						ipTrial := dataS.Sessions[0].Creator_ip
-						handshake := dataS.Sessions[0].Abort_comment
-						if !strings.Contains(handshake, "handshake") { // если кнопка "Играть тут" активированна, добавляем время в файл
-							createOrUpdateKeyValue(ipTrial, minute)
-						}
+		responseString, err := getFromURL(UrlSessions, "uuid", Session_ID)
+		if err != nil {
+			infoString = hostname + " Невозможно получить данные с сайта"
+		} else {
+			var dataS SessionsData                         // структура SessionsData
+			json.Unmarshal([]byte(responseString), &dataS) // декодируем JSON файл
+			log.Printf("[INFO] Отключение %s\n", dataS.Sessions[0].Creator_ip)
+			game, _ := readConfig(dataS.Sessions[0].Product_id, fileGames)
+			billing := dataS.Sessions[0].Billing_type
+			if sessionDur != "off" {
+				var billingTrial string = ""
+				if TrialON {
+					if billing == "trial" {
 						sumTrial = getValueByKey(dataS.Sessions[0].Creator_ip)
-						billingTrial = fmt.Sprintf("\nTrial %dмин", sumTrial)
-					} else if sumTrial > 20 && TrialBlock {
-						billingTrial = fmt.Sprintf("\nKICK - Trial %dмин", sumTrial)
-						// sessionDur = ""
+						if sumTrial < 20 || !TrialBlock {
+							ipTrial := dataS.Sessions[0].Creator_ip
+							handshake := dataS.Sessions[0].Abort_comment
+							if !strings.Contains(handshake, "handshake") { // если кнопка "Играть тут" активированна, добавляем время в файл
+								createOrUpdateKeyValue(ipTrial, minute)
+							}
+							sumTrial = getValueByKey(dataS.Sessions[0].Creator_ip)
+							billingTrial = fmt.Sprintf("\nTrial %dмин", sumTrial)
+						} else if sumTrial > 20 && TrialBlock {
+							billingTrial = fmt.Sprintf("\nKICK - Trial %dмин", sumTrial)
+						}
 					}
 				}
-			}
-			var comment string
-			if dataS.Sessions[0].Abort_comment != "" {
-				comment = "\n" + dataS.Sessions[0].Abort_comment
-			}
-			if !StartMessageON {
-				if OnlineIpInfo {
-					ipInfo = onlineDBip(dataS.Sessions[0].Creator_ip)
-				} else {
-					ipInfo = offlineDBip(dataS.Sessions[0].Creator_ip)
+				var comment string
+				if dataS.Sessions[0].Abort_comment != "" {
+					comment = "\n" + dataS.Sessions[0].Abort_comment
 				}
-				infoString = "[-]" + hostname + " - " + game + "\n" + sessionDur + "\n" + dataS.Sessions[0].Creator_ip + ipInfo + "\n" + comment + billingTrial + "\n" + serverIP
-			} else {
-				infoString = "[-]" + hostname + " - " + game + "\n" + dataS.Sessions[0].Creator_ip + " - " + sessionDur + comment + billingTrial
-			}
+				if !StartMessageON {
+					if OnlineIpInfo {
+						ipInfo = onlineDBip(dataS.Sessions[0].Creator_ip)
+					} else {
+						ipInfo = offlineDBip(dataS.Sessions[0].Creator_ip)
+					}
+					infoString = "[-]" + hostname + " - " + game + "\n" + sessionDur + "\n" + dataS.Sessions[0].Creator_ip + ipInfo + "\n" + comment + billingTrial + "\n" + serverIP
+				} else {
+					infoString = "[-]" + hostname + " - " + game + "\n" + dataS.Sessions[0].Creator_ip + " - " + sessionDur + comment + billingTrial
+				}
 
-		} else {
-			infoString = "off"
+			} else {
+				infoString = "off"
+			}
 		}
 	} else if status == "Comment" { // проверяем написание коммента
 		var sessionDur, commentC, game string
@@ -180,15 +171,10 @@ func sessionInfo(status string) (infoString string) {
 		for i := 0; i < 18; i++ {
 			responseString, err := getFromURL(UrlSessions, "uuid", session_ID)
 			if err != nil {
-				chatMessage := hostname + "Невозможно получить данные с сайта"
+				infoString = hostname + " Невозможно получить данные с сайта"
 				log.Println("[ERROR] Невозможно получить данные с сайта")
-				err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
-				if err != nil {
-					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
-				}
 			} else {
 				json.Unmarshal([]byte(responseString), &dataC) // декодируем JSON файл
-				// test := dataC.Sessions[0].Finished_on
 				if dataC.Sessions[0].Comment == "" {
 					time.Sleep(10 * time.Second)
 				} else {

@@ -758,7 +758,8 @@ func commandBot(tokenBot, hostname string, userID int64) {
 					var serv serverManager // структура serverManager
 					responseData, err := getFromURL(UrlSessions, "server_id", serverID)
 					if err != nil {
-						chatMessage := hostname + "Невозможно получить данные с сайта"
+						chatMessage := hostname + " Невозможно получить данные с сайта"
+						log.Println("[ERROR] Невозможно получить данные с сайта")
 						err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
 						if err != nil {
 							log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
@@ -780,7 +781,8 @@ func commandBot(tokenBot, hostname string, userID int64) {
 								var data SessionsData // структура SessionsData
 								responseData, err := getFromURL(UrlSessions, "server_id", server_ID)
 								if err != nil {
-									chatMessage := hostname + "Невозможно получить данные с сайта"
+									chatMessage := hostname + " Невозможно получить данные с сайта"
+									log.Println("[ERROR] Невозможно получить данные с сайта")
 									err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
 									if err != nil {
 										log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
@@ -942,7 +944,7 @@ func esmeCheck(hostname string) {
 
 		responseString, err := getFromURL(UrlServers, "uuid", serverID)
 		if err != nil {
-			chatMessage := hostname + "Невозможно получить данные с сайта"
+			chatMessage := hostname + " Невозможно получить данные с сайта"
 			log.Println("[ERROR] Невозможно получить данные с сайта")
 			err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
 			if err != nil {
