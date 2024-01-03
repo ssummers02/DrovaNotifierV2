@@ -13,7 +13,7 @@ var ( // true - включение функции, false - выключение
 	ServiceChatID int64         // чат для сервисных сообщений
 	CommandON     bool   = true // включить команды управления ботом
 
-	OnlineIpInfo      bool = false // инфо по IP online
+	OnlineIpInfo      bool = true // инфо по IP online
 	AutoUpdateGeolite bool = true  // автообновление файлов GeoLite с Github
 
 	CheckAntiCheat bool    = true // проверка наличия файлов EasyAntiCheat.exe и EasyAntiCheat_EOS.exe
