@@ -334,7 +334,6 @@ func getTemp(body []byte, xpu string) (value1, value2 string) {
 	for _, child := range root.Children {
 		// Перебор второго уровня
 		for _, subChild := range child.Children {
-			// fmt.Println("child.Children - ", subChild.ImageURL)
 			if subChild.ImageURL == text1 {
 				// Перебор третьего уровня
 				for _, subSubChild := range subChild.Children {

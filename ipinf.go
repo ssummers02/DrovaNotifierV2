@@ -40,13 +40,18 @@ func getSpeed() (string, float64) {
 }
 
 func updateGeoLite(mmdbASN, mmdbCity string) {
-	asnURL := "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb"
-	cityURL := "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb"
-	z := downloadAndReplaceFileIfNeeded(asnURL, mmdbASN)
-	z += downloadAndReplaceFileIfNeeded(cityURL, mmdbCity)
-	if z > 0 {
-		log.Println("[INFO] Перезапуск приложения")
-		restart()
+	_, err := http.Get("https://github.com")
+	if err != nil {
+		fmt.Println("Сайт недоступен")
+	} else {
+		asnURL := "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb"
+		cityURL := "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb"
+		z := downloadAndReplaceFileIfNeeded(asnURL, mmdbASN)
+		z += downloadAndReplaceFileIfNeeded(cityURL, mmdbCity)
+		if z > 0 {
+			log.Println("[INFO] Перезапуск приложения")
+			restart()
+		}
 	}
 }
 
@@ -131,33 +136,39 @@ func restartGeoLite(mmdbASN, mmdbCity string) {
 }
 
 // инфо по IP - ipinfo.io
-func onlineDBip(ip string) string {
-	apiURL := fmt.Sprintf("https://ipinfo.io/%s/json", ip)
-	resp, err := http.Get(apiURL)
+func onlineDBip(ip string) (text string) {
+	_, err := http.Get("https://ipinfo.io")
 	if err != nil {
-		log.Println(err, getLine())
-	}
-	defer resp.Body.Close()
+		fmt.Println("Сайт недоступен")
+	} else {
+		apiURL := fmt.Sprintf("https://ipinfo.io/%s/json", ip)
+		resp, err := http.Get(apiURL)
+		if err != nil {
+			log.Println(err, getLine())
+		}
+		defer resp.Body.Close()
 
-	var ipInfo IPInfoResponse
-	err = json.NewDecoder(resp.Body).Decode(&ipInfo)
-	if err != nil {
-		log.Println(err, getLine())
-	}
+		var ipInfo IPInfoResponse
+		err = json.NewDecoder(resp.Body).Decode(&ipInfo)
+		if err != nil {
+			log.Println(err, getLine())
+		}
 
-	var city, region, isp string = "", "", ""
-	if ipInfo.City != "" {
-		city = " - " + ipInfo.City
-	}
+		var city, region, isp string = "", "", ""
+		if ipInfo.City != "" {
+			city = " - " + ipInfo.City
+		}
 
-	if ipInfo.Region != "" {
-		region = " - " + ipInfo.Region
-	}
+		if ipInfo.Region != "" {
+			region = " - " + ipInfo.Region
+		}
 
-	if ipInfo.ISP != "" {
-		isp = " - " + ipInfo.ISP
-	}
+		if ipInfo.ISP != "" {
+			isp = " - " + ipInfo.ISP
+		}
 
-	text := city + region + isp
+		text = city + region + isp
+	}
 	return text
+
 }

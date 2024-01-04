@@ -857,42 +857,49 @@ func commandBot(tokenBot, hostname string, userID int64) {
 	}
 }
 
-func getFromURL(url, cell, IDinCell string) (string, error) {
-	// Создание HTTP клиента
-	client := &http.Client{}
-
-	var resp *http.Response
-
-	req, err := http.NewRequest("GET", url, nil)
+func getFromURL(url, cell, IDinCell string) (responseString string, err error) {
+	_, err = http.Get("https://services.drova.io")
 	if err != nil {
-		log.Println("Ошибка создания запроса: ", err, getLine())
-		return "", err
+		log.Println("[ERROR] Сайт https://services.drova.io недоступен")
+		return
+	} else {
+		// Создание HTTP клиента
+		client := &http.Client{}
+
+		var resp *http.Response
+
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			log.Println("[ERROR] Ошибка создания запроса: ", err, getLine())
+			return "", err
+		}
+
+		// Установка параметров запроса
+		q := req.URL.Query()
+		q.Add(cell, IDinCell)
+		req.URL.RawQuery = q.Encode()
+
+		// Установка заголовка X-Auth-Token
+		req.Header.Set("X-Auth-Token", authToken)
+
+		// Отправка запроса и получение ответа
+		resp, err = client.Do(req)
+		if err != nil {
+			log.Println("[ERROR] Ошибка отправки запроса: ", err, getLine())
+			return "", err
+		}
+		defer resp.Body.Close()
+		// Запись ответа в строку
+		var buf bytes.Buffer
+		_, err = io.Copy(&buf, resp.Body)
+		if err != nil {
+			log.Println("[ERROR] Ошибка записи запроса в буффер: ", err, getLine())
+			return "", err
+		}
+
+		responseString = buf.String()
 	}
 
-	// Установка параметров запроса
-	q := req.URL.Query()
-	q.Add(cell, IDinCell)
-	req.URL.RawQuery = q.Encode()
-
-	// Установка заголовка X-Auth-Token
-	req.Header.Set("X-Auth-Token", authToken)
-
-	// Отправка запроса и получение ответа
-	resp, err = client.Do(req)
-	if err != nil {
-		log.Println("Ошибка отправки запроса: ", err, getLine())
-		return "", err
-	}
-	defer resp.Body.Close()
-	// Запись ответа в строку
-	var buf bytes.Buffer
-	_, err = io.Copy(&buf, resp.Body)
-	if err != nil {
-		log.Println("Ошибка записи запроса в буффер: ", err, getLine())
-		return "", err
-	}
-
-	responseString := buf.String()
 	return responseString, err
 }
 
@@ -1000,23 +1007,28 @@ func anotherPC(hostname string) {
 
 // скрыть\отобразить станцию
 func viewStation(seeSt, serverID string) {
-	url := "https://services.drova.io/server-manager/servers/" + serverID + "/set_published/" + seeSt
-
-	request, err := http.NewRequest("POST", url, nil)
+	_, err := http.Get("https://services.drova.io")
 	if err != nil {
-		fmt.Println("Ошибка при создании запроса:", err)
-		return
-	}
+		fmt.Println("Сайт недоступен")
+	} else {
+		url := "https://services.drova.io/server-manager/servers/" + serverID + "/set_published/" + seeSt
 
-	request.Header.Set("X-Auth-Token", authToken) // Установка заголовка X-Auth-Token
+		request, err := http.NewRequest("POST", url, nil)
+		if err != nil {
+			fmt.Println("Ошибка при создании запроса:", err)
+			return
+		}
 
-	client := &http.Client{}
-	response, err := client.Do(request)
-	if err != nil {
-		fmt.Println("Ошибка при отправке запроса:", err)
-		return
+		request.Header.Set("X-Auth-Token", authToken) // Установка заголовка X-Auth-Token
+
+		client := &http.Client{}
+		response, err := client.Do(request)
+		if err != nil {
+			fmt.Println("Ошибка при отправке запроса:", err)
+			return
+		}
+		defer response.Body.Close()
 	}
-	defer response.Body.Close()
 }
 
 func GetComment(status string) {

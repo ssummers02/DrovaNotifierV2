@@ -45,9 +45,9 @@ func sessionInfo(status string) (infoString string) {
 			ipInfo = ""
 
 			if OnlineIpInfo {
-				ipInfo = onlineDBip(data.Sessions[0].Creator_ip)
+				ipInfo = data.Sessions[0].Creator_ip + onlineDBip(data.Sessions[0].Creator_ip)
 			} else {
-				ipInfo = offlineDBip(data.Sessions[0].Creator_ip)
+				ipInfo = data.Sessions[0].Creator_ip + offlineDBip(data.Sessions[0].Creator_ip)
 			}
 			var billing string
 			billing = data.Sessions[0].Billing_type
@@ -85,7 +85,7 @@ func sessionInfo(status string) (infoString string) {
 			}
 			localAddr, nameInterface := getInterface()
 			serverIP = "\n" + nameInterface + " - " + localAddr
-			infoString = "[+]" + hostname + " - " + game + "\n" + data.Sessions[0].Creator_ip + ipInfo + "\n" + sessionOn + " - " + billing + serverIP
+			infoString = "[+]" + hostname + " - " + game + "\n" + ipInfo + "\n" + sessionOn + " - " + billing + serverIP
 		}
 	} else if status == "Stop" { // высчитываем продолжительность сессии и формируем текст для отправки
 		var minute int
