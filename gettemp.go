@@ -24,9 +24,12 @@ type Node struct {
 func CheckHWt(hostname string) {
 	var xCPU, xGPU, xGPUf bool = false, false, false
 	for {
+		var fanZ float64
 		tCPU, tGPU, tGPUhs, fan1, fanp1, fan2, fanp2, _ := GetTemperature()
 		if fan2 == -1 {
-			fan2 = fan1
+			fanZ = fan1
+		} else {
+			fanZ = fan2
 		}
 
 		if tGPUhs == -1 {
@@ -40,7 +43,7 @@ func CheckHWt(hostname string) {
 				tCPUsum += tCPU
 				time.Sleep(5 * time.Second)
 			}
-			log.Println("tCPUsum = ", tCPUsum)
+			log.Printf("tCPUsum = %.1f\n", tCPUsum)
 			tCPUavg := tCPUsum / 6
 			if tCPUavg > CPUtmax {
 				chatMessage := fmt.Sprintf("Внимание! "+hostname+"\nt CPU: %.1f °C\nt CPU avg:  %.1f °C", tCPU, tCPUavg)
@@ -57,7 +60,7 @@ func CheckHWt(hostname string) {
 				tCPUsum += tCPU
 				time.Sleep(5 * time.Second)
 			}
-			log.Println("tCPUsum = ", tCPUsum)
+			log.Printf("tCPUsum = %.1f\n", tCPUsum)
 			tCPUavg := tCPUsum / 6
 			if tCPUavg < CPUtmax-DeltaT {
 				chatMessage := fmt.Sprintf("Норма. "+hostname+"\nt CPU: %.1f °C\nt CPU avg:  %.1f °C", tCPU, tCPUavg)
@@ -69,18 +72,20 @@ func CheckHWt(hostname string) {
 			}
 		}
 
-		if (tGPU > FANt || tGPUhs > FANt) && (fan1 < FANrpm || fan2 < FANrpm) && !xGPUf {
+		if (tGPU > FANt || tGPUhs > FANt) && (fan1 < FANrpm || fanZ < FANrpm) && !xGPUf {
 			var chatMessage string
 			time.Sleep(2 * time.Second)
 			_, tGPU, tGPUhs, fan1, fanp1, fan2, fanp2, _ := GetTemperature()
 			if fan2 == -1 {
-				fan2 = fan1
+				fanZ = fan1
+			} else {
+				fanZ = fan2
 			}
 
 			if tGPUhs == -1 {
 				tGPUhs = tGPU
 			}
-			if (tGPU > FANt || tGPUhs > FANt) && (fan1 < FANrpm || fan2 < FANrpm) {
+			if (tGPU > FANt || tGPUhs > FANt) && (fan1 < FANrpm || fanZ < FANrpm) {
 				chatMessage = fmt.Sprintf("Внимание! "+hostname+"\nt GPU: %.1f °C\nt HotSpot: %.1f °C\n", tGPU, tGPUhs)
 				chatMessage += fmt.Sprintf("Fan1: %.0f RPM - %.0f %%\n", fan1, fanp1)
 				if fan2 != -1 {
@@ -92,7 +97,7 @@ func CheckHWt(hostname string) {
 				}
 				xGPUf = true
 			}
-		} else if xGPUf && tGPU > FANt && tGPUhs > FANt && fan1 > FANrpm && fan2 > FANrpm {
+		} else if xGPUf && tGPU > FANt && tGPUhs > FANt && fan1 > FANrpm && fanZ > FANrpm {
 			var chatMessage string
 			chatMessage = fmt.Sprintf("Норма. "+hostname+"\nt GPU: %.1f °C\nt HotSpot: %.1f °C\n", tGPU, tGPUhs)
 			chatMessage += fmt.Sprintf("Fan1: %.0f RPM - %.0f %%\n", fan1, fanp1)
@@ -109,19 +114,19 @@ func CheckHWt(hostname string) {
 		if (tGPU > GPUtmax || tGPUhs > GPUhsTmax) && !xGPU {
 			var chatMessage string
 			var tGPUsum, tGPUhsSum float64 = 0, 0
-			log.Println("tGPU=", tGPU, "tGPUhs=", tGPUhs)
+			log.Printf("tGPU = %.1f, tGPUhs = %.1f\n", tGPU, tGPUhs)
 			for i := 0; i < 6; i++ {
 				_, tGPU, tGPUhs, _, _, _, _, _ = GetTemperature()
 				tGPUsum += tGPU
 				tGPUhsSum += tGPUhs
 				time.Sleep(5 * time.Second)
 			}
-			log.Println("tGPUsum = ", tGPUsum)
-			log.Println("tGPUhsSum = ", tGPUhsSum)
+			log.Printf("tGPUsum = %.1f\n", tGPUsum)
+			log.Printf("tGPUhsSum = %.1f\n", tGPUhsSum)
 			tGPUavg := tGPUsum / 6
 			tGPUhsAvg := tGPUhsSum / 6
 			if tGPUavg > GPUtmax || tGPUhsAvg > GPUhsTmax {
-				log.Println("tGPUavg=", tGPUavg, "tGPUhsAvg=", tGPUhsAvg)
+				log.Printf("tGPUavg = %.1f, tGPUhsAvg = %.1f\n", tGPUavg, tGPUhsAvg)
 				chatMessage = fmt.Sprintf("Внимание! "+hostname+"\nt GPU: %.1f °C\nt HotSpot: %.1f °C\n", tGPU, tGPUhs)
 				if fan1 != -1 {
 					chatMessage += fmt.Sprintf("Fan1: %.0f RPM - %.0f %%\n", fan1, fanp1)
@@ -138,7 +143,7 @@ func CheckHWt(hostname string) {
 		} else if tGPU < GPUtmax && tGPUhs < GPUhsTmax && xGPU {
 			var chatMessage string
 			var tGPUsum, tGPUhsSum float64 = 0, 0
-			log.Println("tGPU=", tGPU, "tGPUhs=", tGPUhs)
+			log.Printf("tGPU = %.1f, tGPUhs = %.1f\n", tGPU, tGPUhs)
 			for i := 0; i < 6; i++ {
 				_, tGPU, tGPUhs, _, _, _, _, _ = GetTemperature()
 				tGPUsum += tGPU
@@ -150,7 +155,7 @@ func CheckHWt(hostname string) {
 			tGPUavg := tGPUsum / 6
 			tGPUhsAvg := tGPUhsSum / 6
 			if tGPUavg < GPUtmax-DeltaT && tGPUhsAvg < GPUhsTmax-DeltaT {
-				log.Println("tGPUavg=", tGPUavg, "tGPUhsAvg=", tGPUhsAvg)
+				log.Printf("tGPUavg = %.1f, tGPUhsAvg = %.1f\n", tGPUavg, tGPUhsAvg)
 				chatMessage = fmt.Sprintf("Норма. "+hostname+"\nt GPU: %.1f °C\nt HotSpot: %.1f °C\n", tGPU, tGPUhs)
 				if fan1 != -1 {
 					chatMessage += fmt.Sprintf("Fan1: %.0f RPM - %.0f %%\n", fan1, fanp1)
@@ -340,7 +345,7 @@ func getTemp(body []byte, xpu string) (value1, value2 string) {
 					if subSubChild.Text == text4 {
 						// Перебор четвертого уровня
 						for _, subSubSubChild := range subSubChild.Children {
-							if subSubSubChild.Text == text2 {
+							if subSubSubChild.Text == text2 || (subSubSubChild.Text == "GPU Fan" && text1 == "images_icon/nvidia.png") {
 								value1 = subSubSubChild.Value
 							}
 							if subSubSubChild.Text == text3 {
