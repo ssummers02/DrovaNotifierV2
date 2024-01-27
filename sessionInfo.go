@@ -30,10 +30,14 @@ type SessionsData struct {
 func sessionInfo(status string) (infoString string) {
 	var sumTrial int
 	var serverIP string
+	var hname string = ""
+	if viewHostname {
+		hname = hostname + " - "
+	}
 	if status == "Start" { // формируем текст для отправки
 		responseString, err := getFromURL(UrlSessions, "server_id", serverID)
 		if err != nil {
-			infoString = hostname + " Невозможно получить данные с сайта"
+			infoString = hname + "невозможно получить данные с сайта"
 			log.Println("[ERROR] Невозможно получить данные с сайта")
 		} else {
 			var data SessionsData                         // структура SessionsData
@@ -67,14 +71,19 @@ func sessionInfo(status string) (infoString string) {
 
 						if TrialBlock {
 							text := "Злоупотребление Триалом! Кикаем!"
-							message := fmt.Sprintf("Внимание! Станция %s.\n%s", hostname, text)
+							var message string
+							if viewHostname {
+								message = fmt.Sprintf("Внимание! Станция %s.\n%s", hostname, text)
+							} else {
+								message = fmt.Sprintf("Внимание!\n%s", text)
+							}
 							err := SendMessage(BotToken, Chat_IDint, message)
 							if err != nil {
-								log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+								log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 							}
 							log.Printf("[INFO] Заблокировано соединение: %s. Trial %d", data.Sessions[0].Creator_ip, sumTrial)
 							time.Sleep(10 * time.Second)
-							err = runCommand("taskkill", "/IM", "ese.exe", "/F")
+							err = runCommand("taskkill", "/IM", "ese.exe", "/F") // закрываем стример сервиса
 							if err != nil {
 								log.Println("[ERORR] Ошибка выполнения команды:", err)
 								return
@@ -85,7 +94,10 @@ func sessionInfo(status string) (infoString string) {
 			}
 			localAddr, nameInterface := getInterface()
 			serverIP = "\n" + nameInterface + " - " + localAddr
-			infoString = "[+]" + hostname + " - " + game + "\n" + ipInfo + "\n" + sessionOn + " - " + billing + serverIP
+			game = fmt.Sprintf("<b><i> %s </i></b>", game)
+			infoHTML = hname + game + "\n" + ipInfo + "\n" + sessionOn + " - " + billing + serverIP
+			infoString = "<b>🟢</b>" + infoHTML
+
 		}
 	} else if status == "Stop" { // высчитываем продолжительность сессии и формируем текст для отправки
 		var minute int
@@ -117,7 +129,7 @@ func sessionInfo(status string) (infoString string) {
 
 		responseString, err := getFromURL(UrlSessions, "uuid", Session_ID)
 		if err != nil {
-			infoString = hostname + " Невозможно получить данные с сайта"
+			infoString = hname + "невозможно получить данные с сайта"
 		} else {
 			var dataS SessionsData                         // структура SessionsData
 			json.Unmarshal([]byte(responseString), &dataS) // декодируем JSON файл
@@ -146,15 +158,16 @@ func sessionInfo(status string) (infoString string) {
 				if dataS.Sessions[0].Abort_comment != "" {
 					comment = "\n" + dataS.Sessions[0].Abort_comment
 				}
+				game = fmt.Sprintf("<b><i> %s </i></b>", game)
 				if !StartMessageON {
 					if OnlineIpInfo {
 						ipInfo = onlineDBip(dataS.Sessions[0].Creator_ip)
 					} else {
 						ipInfo = offlineDBip(dataS.Sessions[0].Creator_ip)
 					}
-					infoString = "[-]" + hostname + " - " + game + "\n" + sessionDur + "\n" + dataS.Sessions[0].Creator_ip + ipInfo + "\n" + comment + billingTrial + "\n" + serverIP
+					infoString = "<b>🔴</b>" + hname + game + "\n" + sessionDur + "\n" + dataS.Sessions[0].Creator_ip + ipInfo + "\n" + comment + billingTrial + "\n" + serverIP
 				} else {
-					infoString = "[-]" + hostname + " - " + game + "\n" + dataS.Sessions[0].Creator_ip + " - " + sessionDur + comment + billingTrial
+					infoString = "<b>🔴</b>" + hname + game + "\n" + dataS.Sessions[0].Creator_ip + " - " + sessionDur + comment + billingTrial
 				}
 
 			} else {
@@ -171,7 +184,7 @@ func sessionInfo(status string) (infoString string) {
 		for i := 0; i < 18; i++ {
 			responseString, err := getFromURL(UrlSessions, "uuid", session_ID)
 			if err != nil {
-				infoString = hostname + " Невозможно получить данные с сайта"
+				infoString = hname + "невозможно получить данные с сайта"
 				log.Println("[ERROR] Невозможно получить данные с сайта")
 			} else {
 				json.Unmarshal([]byte(responseString), &dataC) // декодируем JSON файл
@@ -185,7 +198,7 @@ func sessionInfo(status string) (infoString string) {
 					sessionDur, _ = dur(stopTime, startTime)
 					commentC = dataC.Sessions[0].Comment
 					log.Printf("[INFO] Получение комментария %s\n, %s ", dataC.Sessions[0].Creator_ip, session_ID)
-					infoString = hostname + " - " + game + "\n" + dataC.Sessions[0].Creator_ip + " - " + sessionDur + "\n" + commentC
+					infoString = "<b>🟡</b>" + hname + " - " + "<b><i>" + game + "</i></b>" + "\n" + dataC.Sessions[0].Creator_ip + " - " + sessionDur + "\n" + commentC
 					i = 18
 				}
 			}

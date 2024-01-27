@@ -21,8 +21,9 @@ type Node struct {
 	Children []Node `json:"Children"`
 }
 
-func CheckHWt(hostname string) {
-	var xCPU, xGPU, xGPUf bool = false, false, false
+func (a *App) CheckHWt() {
+	var xCPU, xGPU, xGPUf = false, false, false
+
 	for {
 		var fanZ float64
 		tCPU, tGPU, tGPUhs, fan1, fanp1, fan2, fanp2, _ := GetTemperature()
@@ -36,7 +37,7 @@ func CheckHWt(hostname string) {
 			tGPUhs = tGPU
 		}
 
-		if tCPU > CPUtmax && !xCPU {
+		if tCPU > a.cfg.CPUtmax && !xCPU {
 			var tCPUsum float64 = 0
 			for i := 0; i < 6; i++ {
 				tCPU, _, _, _, _, _, _, _ = GetTemperature()
@@ -45,11 +46,11 @@ func CheckHWt(hostname string) {
 			}
 			log.Printf("tCPUsum = %.1f\n", tCPUsum)
 			tCPUavg := tCPUsum / 6
-			if tCPUavg > CPUtmax {
-				chatMessage := fmt.Sprintf("Внимание! "+hostname+"\nt CPU: %.1f °C\nt CPU avg:  %.1f °C", tCPU, tCPUavg)
-				err := SendMessage(BotToken, Chat_IDint, chatMessage)
+			if tCPUavg > a.cfg.CPUtmax {
+				chatMessage := fmt.Sprintf("Внимание!\n "+"t CPU: %.1f °C\nt CPU avg:  %.1f °C", tCPU, tCPUavg)
+				err := a.tg.SendMessage(chatMessage)
 				if err != nil {
-					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+					log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 				}
 				xCPU = true
 			}
@@ -62,17 +63,17 @@ func CheckHWt(hostname string) {
 			}
 			log.Printf("tCPUsum = %.1f\n", tCPUsum)
 			tCPUavg := tCPUsum / 6
-			if tCPUavg < CPUtmax-DeltaT {
-				chatMessage := fmt.Sprintf("Норма. "+hostname+"\nt CPU: %.1f °C\nt CPU avg:  %.1f °C", tCPU, tCPUavg)
-				err := SendMessage(BotToken, Chat_IDint, chatMessage)
+			if tCPUavg < a.cfg.CPUtmax-a.cfg.DeltaT {
+				chatMessage := fmt.Sprintf("Норма. "+"\nt CPU: %.1f °C\nt CPU avg:  %.1f °C", tCPU, tCPUavg)
+				err := a.tg.SendMessage(chatMessage)
 				if err != nil {
-					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+					log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 				}
 				xCPU = false
 			}
 		}
 
-		if (tGPU > FANt || tGPUhs > FANt) && (fan1 < FANrpm || fanZ < FANrpm) && !xGPUf {
+		if (tGPU > a.cfg.FANt || tGPUhs > a.cfg.FANt) && (fan1 < a.cfg.FANrpm || fanZ < a.cfg.FANrpm) && !xGPUf {
 			var chatMessage string
 			time.Sleep(2 * time.Second)
 			_, tGPU, tGPUhs, fan1, fanp1, fan2, fanp2, _ := GetTemperature()
@@ -85,33 +86,33 @@ func CheckHWt(hostname string) {
 			if tGPUhs == -1 {
 				tGPUhs = tGPU
 			}
-			if (tGPU > FANt || tGPUhs > FANt) && (fan1 < FANrpm || fanZ < FANrpm) {
-				chatMessage = fmt.Sprintf("Внимание! "+hostname+"\nt GPU: %.1f °C\nt HotSpot: %.1f °C\n", tGPU, tGPUhs)
+			if (tGPU > a.cfg.FANt || tGPUhs > a.cfg.FANt) && (fan1 < a.cfg.FANrpm || fanZ < a.cfg.FANrpm) {
+				chatMessage = fmt.Sprintf("Внимание! "+"\nt GPU: %.1f °C\nt HotSpot: %.1f °C\n", tGPU, tGPUhs)
 				chatMessage += fmt.Sprintf("Fan1: %.0f RPM - %.0f %%\n", fan1, fanp1)
 				if fan2 != -1 {
 					chatMessage += fmt.Sprintf("Fan2: %.0f RPM - %.0f %%\n", fan2, fanp2)
 				}
-				err := SendMessage(BotToken, Chat_IDint, chatMessage)
+				err := a.tg.SendMessage(chatMessage)
 				if err != nil {
-					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+					log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 				}
 				xGPUf = true
 			}
-		} else if xGPUf && tGPU > FANt && tGPUhs > FANt && fan1 > FANrpm && fanZ > FANrpm {
+		} else if xGPUf && tGPU > a.cfg.FANt && tGPUhs > a.cfg.FANt && fan1 > a.cfg.FANrpm && fanZ > a.cfg.FANrpm {
 			var chatMessage string
-			chatMessage = fmt.Sprintf("Норма. "+hostname+"\nt GPU: %.1f °C\nt HotSpot: %.1f °C\n", tGPU, tGPUhs)
+			chatMessage = fmt.Sprintf("Норма. "+"\nt GPU: %.1f °C\nt HotSpot: %.1f °C\n", tGPU, tGPUhs)
 			chatMessage += fmt.Sprintf("Fan1: %.0f RPM - %.0f %%\n", fan1, fanp1)
 			if fan2 != -1 {
 				chatMessage += fmt.Sprintf("Fan2: %.0f RPM - %.0f %%\n", fan2, fanp2)
 			}
-			err := SendMessage(BotToken, Chat_IDint, chatMessage)
+			err := a.tg.SendMessage(chatMessage)
 			if err != nil {
-				log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+				log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 			}
 			xGPUf = false
 		}
 
-		if (tGPU > GPUtmax || tGPUhs > GPUhsTmax) && !xGPU {
+		if (tGPU > a.cfg.GPUtmax || tGPUhs > a.cfg.GPUhsTmax) && !xGPU {
 			var chatMessage string
 			var tGPUsum, tGPUhsSum float64 = 0, 0
 			log.Printf("tGPU = %.1f, tGPUhs = %.1f\n", tGPU, tGPUhs)
@@ -125,22 +126,22 @@ func CheckHWt(hostname string) {
 			log.Printf("tGPUhsSum = %.1f\n", tGPUhsSum)
 			tGPUavg := tGPUsum / 6
 			tGPUhsAvg := tGPUhsSum / 6
-			if tGPUavg > GPUtmax || tGPUhsAvg > GPUhsTmax {
+			if tGPUavg > a.cfg.GPUtmax || tGPUhsAvg > a.cfg.GPUhsTmax {
 				log.Printf("tGPUavg = %.1f, tGPUhsAvg = %.1f\n", tGPUavg, tGPUhsAvg)
-				chatMessage = fmt.Sprintf("Внимание! "+hostname+"\nt GPU: %.1f °C\nt HotSpot: %.1f °C\n", tGPU, tGPUhs)
+				chatMessage = fmt.Sprintf("Внимание! "+"\nt GPU: %.1f °C\nt HotSpot: %.1f °C\n", tGPU, tGPUhs)
 				if fan1 != -1 {
 					chatMessage += fmt.Sprintf("Fan1: %.0f RPM - %.0f %%\n", fan1, fanp1)
 					if fan2 != -1 {
 						chatMessage += fmt.Sprintf("Fan2: %.0f RPM - %.0f %%\n", fan2, fanp2)
 					}
 				}
-				err := SendMessage(BotToken, Chat_IDint, chatMessage)
+				err := a.tg.SendMessage(chatMessage)
 				if err != nil {
-					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+					log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 				}
 				xGPU = true
 			}
-		} else if tGPU < GPUtmax && tGPUhs < GPUhsTmax && xGPU {
+		} else if tGPU < a.cfg.GPUtmax && tGPUhs < a.cfg.GPUhsTmax && xGPU {
 			var chatMessage string
 			var tGPUsum, tGPUhsSum float64 = 0, 0
 			log.Printf("tGPU = %.1f, tGPUhs = %.1f\n", tGPU, tGPUhs)
@@ -150,22 +151,22 @@ func CheckHWt(hostname string) {
 				tGPUhsSum += tGPUhs
 				time.Sleep(5 * time.Second)
 			}
-			log.Println("tGPUsum = ", tGPUsum)
-			log.Println("tGPUhsSum = ", tGPUhsSum)
+			log.Printf("tGPUsum = %.1f\n", tGPUsum)
+			log.Printf("tGPUhsSum = %.1f\n", tGPUhsSum)
 			tGPUavg := tGPUsum / 6
 			tGPUhsAvg := tGPUhsSum / 6
-			if tGPUavg < GPUtmax-DeltaT && tGPUhsAvg < GPUhsTmax-DeltaT {
+			if tGPUavg < a.cfg.GPUtmax-a.cfg.DeltaT && tGPUhsAvg < a.cfg.GPUhsTmax-a.cfg.DeltaT {
 				log.Printf("tGPUavg = %.1f, tGPUhsAvg = %.1f\n", tGPUavg, tGPUhsAvg)
-				chatMessage = fmt.Sprintf("Норма. "+hostname+"\nt GPU: %.1f °C\nt HotSpot: %.1f °C\n", tGPU, tGPUhs)
+				chatMessage = fmt.Sprintf("Норма. "+"\nt GPU: %.1f °C\nt HotSpot: %.1f °C\n", tGPU, tGPUhs)
 				if fan1 != -1 {
 					chatMessage += fmt.Sprintf("Fan1: %.0f RPM - %.0f %%\n", fan1, fanp1)
 					if fan2 != -1 {
 						chatMessage += fmt.Sprintf("Fan2: %.0f RPM - %.0f %%\n", fan2, fanp2)
 					}
 				}
-				err := SendMessage(BotToken, Chat_IDint, chatMessage)
+				err := a.tg.SendMessage(chatMessage)
 				if err != nil {
-					log.Println("[ERROR] Ошибка отправки сообщения: ", err, getLine())
+					log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 				}
 				xGPU = false
 			}
@@ -177,93 +178,98 @@ func CheckHWt(hostname string) {
 func GetTemperature() (tCPU, tGPU, tGPUhs, fan1, fanp1, fan2, fanp2 float64, tMessage string) {
 	var body []byte
 	tMessage = ""
-	urlLHM := "http://localhost:8085/data.json"
-	respLHM, err := http.Get(urlLHM)
+	_, err := http.Get("http://localhost:8085/data.json")
 	if err != nil {
-		log.Println(err)
-		restart()
-	}
-	defer respLHM.Body.Close()
-
-	body, err = io.ReadAll(respLHM.Body)
-	if err != nil {
-		log.Println(err)
-	}
-
-	tCPU, tGPU, tGPUhs, fan1, fanp1, fan2, fanp2 = -1, -1, -1, -1, -1, -1, -1
-
-	tempCPU1, tempCPU2 := getTemp(body, "cpu")
-	if tempCPU1 != "-1" {
-		tMessage += fmt.Sprintf("t CPU = %s\n", tempCPU1)
-		tCPU = takeFloat(tempCPU1)
-	} else if tempCPU2 != "-1" {
-		tMessage += fmt.Sprintf("t CPU = %s\n", tempCPU2)
-		tCPU = takeFloat(tempCPU2)
-	}
-
-	tempGPUnv1, tempGPUnv2 := getTemp(body, "gpuNVidia")
-
-	if tempGPUnv1 != "-1" {
-		tMessage += fmt.Sprintf("t GPU = %s\n", tempGPUnv1)
-		tGPU = takeFloat(tempGPUnv1)
-
-		if tempGPUnv2 != "-1" {
-			tMessage += fmt.Sprintf("t GPU HotSpot= %s\n", tempGPUnv2)
-			tGPUhs = takeFloat(tempGPUnv2)
-		}
-
-		fanNV1, fanNV2 := getTemp(body, "fanNVidia")
-		if fanNV1 != "-1" {
-			fanNVp1, _ := getTemp(body, "fanNVp")
-			tMessage += fmt.Sprintf("t GPU fan1 = %s\nGPU fan1 = %s\n", fanNV1, fanNVp1)
-			fan1 = takeFloat(fanNV1)
-			fanp1 = takeFloat(fanNVp1)
-		}
-		if fanNV2 != "-1" {
-			_, fanNVp2 := getTemp(body, "fanNVp")
-			tMessage += fmt.Sprintf("t GPU fan2 = %s\nGPU fan2 = %s\n", fanNV2, fanNVp2)
-			fan2 = takeFloat(fanNV2)
-			fanp2 = takeFloat(fanNVp2)
-		}
+		log.Println("[ERROR] web-сервер LHM недоступен")
 	} else {
-		tempGPUa1, tempGPUa2 := getTemp(body, "gpuAMD")
-		if tempGPUa1 != "-1" {
-			tMessage += fmt.Sprintf("t GPU = %s\n", tempGPUa1)
-			tGPU = takeFloat(tempGPUa1)
-			if tempGPUa2 != "-1" {
-				tMessage += fmt.Sprintf("t GPU HotSpot= %s\n", tempGPUa2)
-				tGPUhs = takeFloat(tempGPUa2)
+		urlLHM := "http://localhost:8085/data.json"
+		respLHM, err := http.Get(urlLHM)
+		if err != nil {
+			log.Println(err)
+			// restart()
+		}
+		defer respLHM.Body.Close()
+
+		body, err = io.ReadAll(respLHM.Body)
+		if err != nil {
+			log.Println(err)
+		}
+
+		tCPU, tGPU, tGPUhs, fan1, fanp1, fan2, fanp2 = -1, -1, -1, -1, -1, -1, -1
+
+		tempCPU1, tempCPU2 := getTemp(body, "cpu")
+		if tempCPU1 != "-1" {
+			tMessage += fmt.Sprintf("t CPU = %s\n", tempCPU1)
+			tCPU = takeFloat(tempCPU1)
+		} else if tempCPU2 != "-1" {
+			tMessage += fmt.Sprintf("t CPU = %s\n", tempCPU2)
+			tCPU = takeFloat(tempCPU2)
+		}
+
+		tempGPUnv1, tempGPUnv2 := getTemp(body, "gpuNVidia")
+
+		if tempGPUnv1 != "-1" {
+			tMessage += fmt.Sprintf("t GPU = %s\n", tempGPUnv1)
+			tGPU = takeFloat(tempGPUnv1)
+
+			if tempGPUnv2 != "-1" {
+				tMessage += fmt.Sprintf("t GPU HotSpot= %s\n", tempGPUnv2)
+				tGPUhs = takeFloat(tempGPUnv2)
 			}
 
-			fanA1, fanA2 := getTemp(body, "fanAMD")
-			if fanA1 != "-1" {
-				tMessage += fmt.Sprintf("t GPU fan1 = %s\n", fanA1)
-				fan1 = takeFloat(fanA1)
+			fanNV1, fanNV2 := getTemp(body, "fanNVidia")
+			if fanNV1 != "-1" {
+				fanNVp1, _ := getTemp(body, "fanNVp")
+				tMessage += fmt.Sprintf("t GPU fan1 = %s\nGPU fan1 = %s\n", fanNV1, fanNVp1)
+				fan1 = takeFloat(fanNV1)
+				fanp1 = takeFloat(fanNVp1)
 			}
-			if fanA2 != "-1" {
-				tMessage += fmt.Sprintf("t GPU fan2 = %s\n", fanA2)
-				fan2 = takeFloat(fanA2)
+			if fanNV2 != "-1" {
+				_, fanNVp2 := getTemp(body, "fanNVp")
+				tMessage += fmt.Sprintf("t GPU fan2 = %s\nGPU fan2 = %s\n", fanNV2, fanNVp2)
+				fan2 = takeFloat(fanNV2)
+				fanp2 = takeFloat(fanNVp2)
 			}
-
 		} else {
-			tempGPUi1, tempGPUi2 := getTemp(body, "gpuINTEL")
-			if tempGPUi1 != "-1" {
-				tMessage += fmt.Sprintf("t GPU = %s\n", tempGPUi1)
-				tGPU = takeFloat(tempGPUi1)
-
-				if tempGPUi2 != "-1" {
-					tMessage += fmt.Sprintf("t GPU HotSpot= %s\n", tempGPUi2)
-					tGPUhs = takeFloat(tempGPUi2)
+			tempGPUa1, tempGPUa2 := getTemp(body, "gpuAMD")
+			if tempGPUa1 != "-1" {
+				tMessage += fmt.Sprintf("t GPU = %s\n", tempGPUa1)
+				tGPU = takeFloat(tempGPUa1)
+				if tempGPUa2 != "-1" {
+					tMessage += fmt.Sprintf("t GPU HotSpot= %s\n", tempGPUa2)
+					tGPUhs = takeFloat(tempGPUa2)
 				}
 
-				fanI1, fanI2 := getTemp(body, "fanINTEL")
-				if fanI1 != "-1" {
-					tMessage += fmt.Sprintf("t GPU fan1 = %s\n", fanI1)
-					fan1 = takeFloat(fanI1)
+				fanA1, fanA2 := getTemp(body, "fanAMD")
+				if fanA1 != "-1" {
+					tMessage += fmt.Sprintf("t GPU fan1 = %s\n", fanA1)
+					fan1 = takeFloat(fanA1)
 				}
-				if fanI2 != "-1" {
-					tMessage += fmt.Sprintf("t GPU fan2 = %s\n", fanI2)
-					fan2 = takeFloat(fanI2)
+				if fanA2 != "-1" {
+					tMessage += fmt.Sprintf("t GPU fan2 = %s\n", fanA2)
+					fan2 = takeFloat(fanA2)
+				}
+
+			} else {
+				tempGPUi1, tempGPUi2 := getTemp(body, "gpuINTEL")
+				if tempGPUi1 != "-1" {
+					tMessage += fmt.Sprintf("t GPU = %s\n", tempGPUi1)
+					tGPU = takeFloat(tempGPUi1)
+
+					if tempGPUi2 != "-1" {
+						tMessage += fmt.Sprintf("t GPU HotSpot= %s\n", tempGPUi2)
+						tGPUhs = takeFloat(tempGPUi2)
+					}
+
+					fanI1, fanI2 := getTemp(body, "fanINTEL")
+					if fanI1 != "-1" {
+						tMessage += fmt.Sprintf("t GPU fan1 = %s\n", fanI1)
+						fan1 = takeFloat(fanI1)
+					}
+					if fanI2 != "-1" {
+						tMessage += fmt.Sprintf("t GPU fan2 = %s\n", fanI2)
+						fan2 = takeFloat(fanI2)
+					}
 				}
 			}
 		}

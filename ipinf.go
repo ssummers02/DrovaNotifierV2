@@ -42,7 +42,7 @@ func getSpeed() (string, float64) {
 func updateGeoLite(mmdbASN, mmdbCity string) {
 	_, err := http.Get("https://github.com")
 	if err != nil {
-		fmt.Println("Сайт недоступен")
+		log.Println("[ERROR] github.com недоступен. Обновление GeoLite невозможно")
 	} else {
 		asnURL := "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb"
 		cityURL := "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb"
@@ -60,7 +60,7 @@ func downloadAndReplaceFileIfNeeded(url, filename string) int8 {
 	time.Sleep(2 * time.Second)
 	resp, err := http.Get("https://api.github.com/repos/P3TERX/GeoLite.mmdb/releases/latest")
 	if err != nil {
-		log.Println("[ERROR] Ошибка: ", err, getLine())
+		log.Println("[ERROR] Ошибка: ", err)
 		restart()
 	}
 	defer resp.Body.Close()
@@ -68,12 +68,12 @@ func downloadAndReplaceFileIfNeeded(url, filename string) int8 {
 	var release Release
 	err = json.NewDecoder(resp.Body).Decode(&release)
 	if err != nil {
-		log.Println("[ERROR] Ошибка: ", err, getLine())
+		log.Println("[ERROR] Ошибка: ", err)
 	}
 
 	fileInfo, err := os.Stat(filename)
 	if err != nil {
-		log.Println("[ERROR] Ошибка получения информации по файлу: ", err, getLine())
+		log.Println("[ERROR] Ошибка получения информации по файлу: ", err)
 	}
 	fileModTime := fileInfo.ModTime()
 
@@ -81,20 +81,20 @@ func downloadAndReplaceFileIfNeeded(url, filename string) int8 {
 		// Отправка GET-запроса для загрузки файла
 		resp, err := http.Get(url)
 		if err != nil {
-			log.Println("[ERROR] Ошибка отправки запроса: ", err, getLine())
+			log.Println("[ERROR] Ошибка отправки запроса: ", err)
 		}
 		defer resp.Body.Close()
 
 		// Создание нового файла и копирование данных из тела ответа
 		out, err := os.Create(filename)
 		if err != nil {
-			log.Println("[ERROR] Ошибка: ", err, getLine())
+			log.Println("[ERROR] Ошибка: ", err)
 		}
 		defer out.Close()
 
 		_, err = io.Copy(out, resp.Body)
 		if err != nil {
-			log.Println("[ERROR] Ошибка замены файлов: ", err, getLine())
+			log.Println("[ERROR] Ошибка замены файлов: ", err)
 		} else {
 			log.Printf("[INFO] Файл %s обновлен\n", filename)
 			z++
@@ -114,7 +114,7 @@ func restartGeoLite(mmdbASN, mmdbCity string) {
 	for i := 0; i < len(geoLite); i++ {
 		fileInfo, err := os.Stat(geoLite[i])
 		if err != nil {
-			log.Println(err, getLine())
+			log.Println(err)
 		}
 		// Проверяем время последнего изменения файла
 		previousModTime[i] = fileInfo.ModTime()
@@ -124,7 +124,7 @@ func restartGeoLite(mmdbASN, mmdbCity string) {
 		for i := 0; i < len(geoLite); i++ {
 			fileInfo, err := os.Stat(geoLite[i])
 			if err != nil {
-				log.Println(err, getLine())
+				log.Println(err)
 			}
 			if previousModTime[i] != fileInfo.ModTime() {
 				log.Println("[INFO] Файл был изменен. Перезапуск приложения...")
@@ -139,19 +139,19 @@ func restartGeoLite(mmdbASN, mmdbCity string) {
 func onlineDBip(ip string) (text string) {
 	_, err := http.Get("https://ipinfo.io")
 	if err != nil {
-		fmt.Println("Сайт недоступен")
+		fmt.Println("Сайт ipinfo.io недоступен")
 	} else {
 		apiURL := fmt.Sprintf("https://ipinfo.io/%s/json", ip)
 		resp, err := http.Get(apiURL)
 		if err != nil {
-			log.Println(err, getLine())
+			log.Println(err)
 		}
 		defer resp.Body.Close()
 
 		var ipInfo IPInfoResponse
 		err = json.NewDecoder(resp.Body).Decode(&ipInfo)
 		if err != nil {
-			log.Println(err, getLine())
+			log.Println(err)
 		}
 
 		var city, region, isp string = "", "", ""
