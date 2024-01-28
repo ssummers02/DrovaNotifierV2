@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"net"
 	"net/http"
@@ -16,37 +15,28 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/oschwald/maxminddb-golang"
 )
 
-/*
-var (
-
-	fileConfig, fileGames, hostname, ipInfo, trialfile string
-	serverID, authToken, mmdbASN, mmdbCity, Session_ID string
-	isRunning                                          bool
-	infoHTML                                           string
-
-)
-*/
 const (
-	newTitle    = "Drova Notifier v2"                                  // Имя окна программы
-	UrlSessions = "https://services.drova.io/session-manager/sessions" // инфо по сессиям
-	UrlServers  = "https://services.drova.io/server-manager/servers"   // для получения инфо по серверам
+	UrlSessions = "https://services.drova.io/session-manager/sessions" // Инфо по сессиям
+	UrlServers  = "https://services.drova.io/server-manager/servers"   // Инфо по серверам
 )
 
-// для выгрузки названий игр с их ID
+// Product для выгрузки названий игр с их ID
 type Product struct {
 	ProductID string `json:"productId"`
 	Title     string `json:"title"`
 }
 
-// для получения провайдера в оффлайн базе
+// ASNRecord Получение провайдера в офлайн базе
 type ASNRecord struct {
 	AutonomousSystemOrganization string `maxminddb:"autonomous_system_organization"`
 }
 
-// для получения города региона в оффлайн базе
+// CityRecord Получение города региона в офлайн базе
 type CityRecord struct {
 	City struct {
 		Names map[string]string `maxminddb:"names"`
@@ -56,7 +46,7 @@ type CityRecord struct {
 	} `maxminddb:"subdivisions"`
 }
 
-// online инфо по IP
+// IPInfoResponse online инфо по IP
 type IPInfoResponse struct {
 	IP     string `json:"ip"`
 	City   string `json:"city"`
@@ -64,17 +54,17 @@ type IPInfoResponse struct {
 	ISP    string `json:"org"`
 }
 
-// структура для выгрузки ID и названия серверов
+// Структура для выгрузки ID и названия серверов
 type serverManager []struct {
-	Server_id    string `json:"uuid"`
+	ServerId     string `json:"uuid"`
 	Name         string `json:"name"`
-	User_id      string `json:"user_id"`
+	UserId       string `json:"user_id"`
 	Status       string `json:"state"`
 	Public       bool   `json:"published"`
 	SessionStart int64  `json:"alive_since"`
 }
 
-// для получения времени запуска windows
+// Win32Operatingsystem Получаем время запуска windows
 type Win32Operatingsystem struct {
 	LastBootUpTime time.Time
 }
@@ -89,7 +79,12 @@ func main() {
 		log.Println("[ERROR] Ошибка открытия файла", err)
 		restart()
 	}
-	defer logFile.Close()
+	defer func(logFile *os.File) {
+		err := logFile.Close()
+		if err != nil {
+			log.Println("Ошибка закрытия файла ", err)
+		}
+	}(logFile)
 
 	// Устанавливаем файл в качестве вывода для логгера
 	log.SetOutput(logFile)
@@ -110,13 +105,13 @@ func main() {
 			if isRunning {
 				log.Println("[INFO] Старт сессии")
 				if app.cfg.StartMessageON {
-					chatMessage := sessionInfo("Start")
+					chatMessage := app.sessionInfo("Start")
 					err := app.tg.SendMessage(chatMessage)
 					if err != nil {
 						log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 					}
 				}
-				i = 2 //т.к. приложение запущено, выходим из цикла
+				i = 2 //Т.к. приложение запущено, выходим из цикла
 			}
 			time.Sleep(5 * time.Second) // интервал проверки запущенного процесса
 		}
@@ -126,13 +121,19 @@ func main() {
 			if !isRunning {
 				log.Println("[INFO] Завершение сессии")
 				if app.cfg.StopMessageON {
-					go GetComment("Stop")
+					go app.GetComment("Stop")
 				}
 				if app.cfg.CommentMessageON {
-					go GetComment("Comment")
+					go app.GetComment("Comment")
 				}
-				app.antiCheat() // проверка античитов
-				app.diskSpace() // проверка свободного места на дисках
+				err := app.antiCheat()
+				if err != nil {
+					return
+				} // проверка античитов
+				err = app.diskSpace()
+				if err != nil {
+					return
+				} // проверка свободного места на дисках
 				if !app.cfg.OnlineIpInfo {
 					if app.cfg.AutoUpdateGeolite { // если включен автоапдейт
 						updateGeoLite(filepath.Join(app.appDir, app.cfg.mmdbASN), filepath.Join(app.appDir, app.cfg.mmdbCity)) // проверяем есть ли обновление для GeoLite
@@ -146,12 +147,12 @@ func main() {
 	}
 }
 
-// конвертирование дат
+// Конвертирование дат
 func dateTimeS(data int64) (string, time.Time) {
 
 	// Создание объекта времени
-	seconds := int64(data / 1000)
-	nanoseconds := int64((data % 1000) * 1000000)
+	seconds := data / 1000
+	nanoseconds := (data % 1000) * 1000000
 	t := time.Unix(seconds, nanoseconds)
 
 	// Форматирование времени
@@ -160,10 +161,11 @@ func dateTimeS(data int64) (string, time.Time) {
 	return formattedTime, t
 }
 
-// высчитываем продолжительность сессии
+// Высчитываем продолжительность сессии
 func dur(stopTime, startTime time.Time) (string, int) {
 	var minutes int
 	var sessionDur string
+	cfg := Config{}
 	if stopTime.String() != "" {
 		duration := stopTime.Sub(startTime).Round(time.Second)
 		// log.Println("[DIAG]duration - ", duration)
@@ -180,11 +182,11 @@ func dur(stopTime, startTime time.Time) (string, int) {
 		} else {
 			sessionDur = sessionDur + hou + ":"
 		}
-		min := strconv.Itoa(minutes)
+		minute := strconv.Itoa(minutes)
 		if minutes < 10 {
-			sessionDur = sessionDur + "0" + min + ":"
+			sessionDur = sessionDur + "0" + minute + ":"
 		} else {
-			sessionDur = sessionDur + min + ":"
+			sessionDur = sessionDur + minute + ":"
 		}
 		sec := strconv.Itoa(seconds)
 		if seconds < 10 {
@@ -192,8 +194,8 @@ func dur(stopTime, startTime time.Time) (string, int) {
 		} else {
 			sessionDur = sessionDur + sec
 		}
-		if !ShortSessionON {
-			if hours == 0 && minutes < minMinute {
+		if !cfg.ShortSessionON {
+			if hours == 0 && minutes < cfg.minMinute {
 				sessionDur = "off"
 			}
 		}
@@ -211,7 +213,12 @@ func getASNRecord(mmdbCity, mmdbASN string, ip net.IP) (*CityRecord, *ASNRecord,
 	if err != nil {
 		return nil, nil, err
 	}
-	defer dbASN.Close()
+	defer func(dbASN *maxminddb.Reader) {
+		err := dbASN.Close()
+		if err != nil {
+			log.Println("[ERROR] dbASN.Close() -", err)
+		}
+	}(dbASN)
 
 	var recordASN ASNRecord
 	err = dbASN.Lookup(ip, &recordASN)
@@ -223,7 +230,12 @@ func getASNRecord(mmdbCity, mmdbASN string, ip net.IP) (*CityRecord, *ASNRecord,
 	if err != nil {
 		return nil, nil, err
 	}
-	defer db.Close()
+	defer func(db *maxminddb.Reader) {
+		err := db.Close()
+		if err != nil {
+			log.Println("[ERROR] db.Close() -", err)
+		}
+	}(db)
 
 	var recordCity CityRecord
 	err = db.Lookup(ip, &recordCity)
@@ -239,11 +251,12 @@ func getASNRecord(mmdbCity, mmdbASN string, ip net.IP) (*CityRecord, *ASNRecord,
 	return &recordCity, &recordASN, err
 }
 
-// полученные данных из оффлайн базы
+// Полученные данных из офлайн базы
 func offlineDBip(ip string) string {
-	var city, region, asn string = "", "", ""
+	var city, region, asn string
+	cfg := Config{}
 
-	cityRecord, asnRecord, err := getASNRecord(mmdbCity, mmdbASN, net.ParseIP(ip))
+	cityRecord, asnRecord, err := getASNRecord(cfg.mmdbCity, cfg.mmdbASN, net.ParseIP(ip))
 	if err != nil {
 		log.Println(err)
 	}
@@ -287,7 +300,7 @@ func offlineDBip(ip string) string {
 			}
 		}
 	}
-
+	ipInfo := ""
 	if city != "" {
 		ipInfo = " - " + city
 	}
@@ -300,7 +313,7 @@ func offlineDBip(ip string) string {
 	return ipInfo
 }
 
-// перезапуск приложения
+// Перезапуск приложения
 func restart() {
 	// Получаем путь к текущему исполняемому файлу
 	execPath, err := os.Executable()
@@ -323,7 +336,7 @@ func restart() {
 	os.Exit(0)
 }
 
-// trial - создание или обновление записи по ключу(ip)
+// Trial - создание или обновление записи по ключу(ip)
 func createOrUpdateKeyValue(key string, value int) {
 	data := readDataFromFile()
 	// Проверяем, существует ли уже ключ в файле
@@ -359,13 +372,19 @@ func getValueByKey(key string) int {
 	return -1 // Возвращаем -1, если ключ не найден
 }
 
-// trial - читаем файл построчно и сздаем слайс
+// Trial - читаем файл построчно и создаем слайс
 func readDataFromFile() []string {
-	file, err := os.Open(trialfile)
+	cfg := Config{}
+	file, err := os.Open(cfg.TrialfileLAN)
 	if err != nil {
 		return []string{}
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Println("[ERROR] TrialfileLAN.Close -", err)
+		}
+	}(file)
 
 	var lines []string
 	scanner := bufio.NewScanner(file)
@@ -376,14 +395,20 @@ func readDataFromFile() []string {
 	return lines
 }
 
-// trial записываем слайс в файл построчно
+// Trial записываем слайс в файл построчно
 func writeDataToFile(data []string) {
-	file, err := os.OpenFile(trialfile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	cfg := Config{}
+	file, err := os.OpenFile(cfg.TrialfileLAN, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Println("[ERROR] TrialfileLAN.Close -", err)
+		}
+	}(file)
 
 	for _, line := range data {
 		if _, err := file.WriteString(line + "\n"); err != nil {
@@ -393,7 +418,7 @@ func writeDataToFile(data []string) {
 	}
 }
 
-// получаем данные из файла в виде ключ = значение
+// Получаем данные из файла в виде ключа = значение
 func readConfig(keys, filename string) (string, error) {
 	var gname string
 	file, err := os.Open(filename)
@@ -401,7 +426,12 @@ func readConfig(keys, filename string) (string, error) {
 		log.Println("[ERROR] Ошибка при открытии файла ", filename, ": ", err)
 		return "[ERROR] Ошибка при открытии файла: ", err
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Printf("[ERROR] %s.Close - %v\n", filename, err)
+		}
+	}(file)
 
 	// Создать сканер для чтения содержимого файла построчно
 	scanner := bufio.NewScanner(file)
@@ -436,7 +466,7 @@ func rebootPC() {
 	}
 }
 
-func getFromURL(url, cell, IDinCell string) (responseString string, err error) {
+func (a *App) getFromURL(url, cell, IDinCell string) (responseString string, err error) {
 	_, err = http.Get("https://services.drova.io")
 	if err != nil {
 		log.Println("[ERROR] Сайт https://services.drova.io недоступен")
@@ -459,7 +489,7 @@ func getFromURL(url, cell, IDinCell string) (responseString string, err error) {
 		req.URL.RawQuery = q.Encode()
 
 		// Установка заголовка X-Auth-Token
-		req.Header.Set("X-Auth-Token", authToken)
+		req.Header.Set("X-Auth-Token", a.cfg.authToken)
 
 		// Отправка запроса и получение ответа
 		resp, err = client.Do(req)
@@ -467,12 +497,17 @@ func getFromURL(url, cell, IDinCell string) (responseString string, err error) {
 			log.Println("[ERROR] Ошибка отправки запроса: ", err)
 			return "", err
 		}
-		defer resp.Body.Close()
+		defer func(Body io.ReadCloser) {
+			err := Body.Close()
+			if err != nil {
+				log.Printf("[ERROR] Body.Close() - %v\n", err)
+			}
+		}(resp.Body)
 		// Запись ответа в строку
 		var buf bytes.Buffer
 		_, err = io.Copy(&buf, resp.Body)
 		if err != nil {
-			log.Println("[ERROR] Ошибка записи запроса в буффер: ", err)
+			log.Println("[ERROR] Ошибка записи запроса в буфер: ", err)
 			return "", err
 		}
 
@@ -482,14 +517,14 @@ func getFromURL(url, cell, IDinCell string) (responseString string, err error) {
 	return responseString, err
 }
 
-// получаем IP интерфейса с наибольшей скоростью исходящего трафика
+// Получаем IP интерфейса с наибольшей скоростью исходящего трафика
 func getInterface() (localAddr, nameInterface string) {
 
 	var localIP, maxInterfaceName string
 	var maxOutgoingSpeed float64
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		log.Printf("[ERROR] Ошибка получения интерфейсов. %s. %s\n", err)
+		log.Printf("[ERROR] Ошибка получения интерфейсов. %s\n", err)
 	}
 
 	maxInterfaceName, maxOutgoingSpeed = getSpeed()
@@ -497,7 +532,7 @@ func getInterface() (localAddr, nameInterface string) {
 	for _, interf := range interfaces {
 		addrs, err := interf.Addrs()
 		if err != nil {
-			log.Printf("[ERROR] Ошибка получения ip адресов. %s. %s\n", err)
+			log.Printf("[ERROR] Ошибка получения ip адресов. %s\n", err)
 		}
 		for _, add := range addrs {
 			if ip, ok := add.(*net.IPNet); ok {
@@ -513,16 +548,16 @@ func getInterface() (localAddr, nameInterface string) {
 	return localAddr, maxInterfaceName
 }
 
-func anotherPC(hostname string) {
+func (a *App) anotherPC(hostname string) {
 	messageText := fmt.Sprintf("Имя ПК не совпадает: %s\n", hostname)
-	err := SendMessage(BotToken, Chat_IDint, messageText)
+	err := a.tg.SendMessage(messageText) // отправка сообщения
 	if err != nil {
 		log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 	}
 }
 
-// скрыть\отобразить станцию
-func viewStation(seeSt, serverID string) error {
+// Скрыть\отобразить станцию
+func (a *App) viewStation(seeSt, serverID string) error {
 	resp, err := http.Get("https://services.drova.io")
 	if err != nil {
 		fmt.Println("Сайт недоступен")
@@ -536,7 +571,7 @@ func viewStation(seeSt, serverID string) error {
 				return err
 			}
 
-			request.Header.Set("X-Auth-Token", authToken) // Установка заголовка X-Auth-Token
+			request.Header.Set("X-Auth-Token", a.cfg.authToken) // Установка заголовка X-Auth-Token
 
 			client := &http.Client{}
 			response, err := client.Do(request)
@@ -544,21 +579,26 @@ func viewStation(seeSt, serverID string) error {
 				fmt.Println("Ошибка при отправке запроса:", err)
 				return err
 			}
-			defer response.Body.Close()
+			defer func(Body io.ReadCloser) {
+				err := Body.Close()
+				if err != nil {
+					log.Printf("[ERROR] response.Body.Close - %v\n", err)
+				}
+			}(response.Body)
 		}
 	}
 	return err
 }
 
-func GetComment(status string) {
-	chatMessage := sessionInfo(status) // формируем сообщение с комментарием
+func (a *App) GetComment(status string) {
+	chatMessage := a.sessionInfo(status) // формируем сообщение с комментарием
 	if status == "Comment" {
-		err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
+		err := a.tg.SendMessage(chatMessage) // отправка сообщения
 		if err != nil {
 			log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 		}
 	} else if chatMessage != "off" && chatMessage != "" {
-		err := SendMessage(BotToken, Chat_IDint, chatMessage) // отправка сообщения
+		err := a.tg.SendMessage(chatMessage) // отправка сообщения
 		if err != nil {
 			log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 		}
@@ -584,39 +624,45 @@ func GetComment(status string) {
 // 	fmt.Println("Команда успешно выполнена")
 // }
 
-func statusServSession() (statusSession, statusServer string, public bool, err error) {
-	responseStringServers, err := getFromURL(UrlServers, "uuid", serverID)
+func (a *App) statusServSession() (statusSession, statusServer string, public bool, err error) {
+	responseStringServers, err := a.getFromURL(UrlServers, "uuid", a.cfg.serverID)
 	if err != nil {
-		chatMessage := hostname + " Невозможно получить данные с сайта"
+		chatMessage := "Невозможно получить данные с сайта"
 		log.Println("[ERROR] Невозможно получить данные с сайта")
-		err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
+		err := a.tg.SendMessage(chatMessage) // отправка сообщения
 		if err != nil {
 			log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 		}
 	} else {
-		var serv serverManager                               // структура serverManager
-		json.Unmarshal([]byte(responseStringServers), &serv) // декодируем JSON файл
+		var serv serverManager // структура serverManager
+		err := json.Unmarshal([]byte(responseStringServers), &serv)
+		if err != nil {
+			return "", "", false, err
+		} // декодируем JSON файл
 
 		var x, y int8 = 0, 0
 
 		for range serv {
-			if serv[x].Server_id == serverID {
+			if serv[x].ServerId == a.cfg.serverID {
 				y = x
 			}
 			x++
 		}
 
-		responseStringSessions, err := getFromURL(UrlSessions, "server_id", serverID)
+		responseStringSessions, err := a.getFromURL(UrlSessions, "server_id", a.cfg.serverID)
 		if err != nil {
-			chatMessage := hostname + "невозможно получить данные с сайта"
+			chatMessage := "невозможно получить данные с сайта"
 			log.Println("[ERROR] Невозможно получить данные с сайта")
-			err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
+			err := a.tg.SendMessage(chatMessage) // отправка сообщения
 			if err != nil {
 				log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 			}
 		} else {
-			var data SessionsData                                 // структура SessionsData
-			json.Unmarshal([]byte(responseStringSessions), &data) // декодируем JSON файл
+			var data SessionsData // структура SessionsData
+			err := json.Unmarshal([]byte(responseStringSessions), &data)
+			if err != nil {
+				return "", "", false, err
+			} // декодируем JSON файл
 			statusSession = data.Sessions[0].Status
 			statusServer = serv[y].Status
 			public = serv[y].Public
@@ -625,28 +671,28 @@ func statusServSession() (statusSession, statusServer string, public bool, err e
 	return statusSession, statusServer, public, err
 }
 
-func delayReboot(n int) {
+func (a *App) delayReboot(n int) {
 	for {
-		statusSession, statusServer, _, err := statusServSession()
+		statusSession, statusServer, _, err := a.statusServSession()
 		if err != nil {
 			log.Println("[ERROR] Ошибка получения статусов: ", err)
 		} else {
 			var i int
 			if statusSession != "ACTIVE" {
-				chatMessage := fmt.Sprintf("Станция %s %s\n", hostname, statusServer)
+				chatMessage := fmt.Sprintf("Станция %s %s\n", a.cfg.hostName, statusServer)
 				chatMessage += fmt.Sprintf("Статус сессии - %s", statusSession)
-				err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
+				err := a.tg.SendMessage(chatMessage) // отправка сообщения
 				if err != nil {
 					log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 				}
 				for i = 0; i <= n; i++ {
-					_, statusServer, _, err := statusServSession()
+					_, statusServer, _, err := a.statusServSession()
 					if err != nil {
 						log.Println("[ERROR] Ошибка получения статусов: ", err)
 					} else {
 						if (statusServer == "OFFLINE" && i == n) || n == 0 {
-							chatMessage := fmt.Sprintf("Станция %s будет перезагружена через минуту", hostname)
-							err := SendMessage(BotToken, ServiceChatID, chatMessage) // отправка сообщения
+							chatMessage := fmt.Sprintf("Станция %s будет перезагружена через минуту", a.cfg.hostName)
+							err := a.tg.SendMessage(chatMessage) // отправка сообщения
 							if err != nil {
 								log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 							}

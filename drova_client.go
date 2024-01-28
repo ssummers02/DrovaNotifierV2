@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"os"
@@ -11,18 +12,18 @@ import (
 	"time"
 )
 
-type DrovaCient struct {
+type DrovaClient struct {
 	http.Client
 }
 
-func NewDrovaCient() *DrovaCient {
+func NewDrovaClient() *DrovaClient {
 	client := http.Client{}
 	client.Timeout = 10 * time.Second
 
-	return &DrovaCient{Client: client}
+	return &DrovaClient{Client: client}
 }
 
-func (c *DrovaCient) GetGame(dir string) error {
+func (c *DrovaClient) GetGame(dir string) error {
 	fileGames := filepath.Join(dir, "games.txt")
 
 	// Отправить GET-запрос на API
@@ -30,7 +31,12 @@ func (c *DrovaCient) GetGame(dir string) error {
 	if err != nil {
 		return fmt.Errorf("ошибка при выполнении запроса: %v", err)
 	}
-	defer respGame.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("[ERROR] respGame.Body.Close(): ", err)
+		}
+	}(respGame.Body)
 
 	// Прочитать JSON-ответ
 	var products []Product
@@ -43,7 +49,12 @@ func (c *DrovaCient) GetGame(dir string) error {
 	if err != nil {
 		return fmt.Errorf("ошибка при создании файла: %v", err)
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Println("[ERROR] fileGames.Close(): ", err)
+		}
+	}(file)
 
 	builder := strings.Builder{}
 	// Записывать данные в файл

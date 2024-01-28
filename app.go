@@ -2,17 +2,18 @@ package main
 
 import (
 	"fmt"
-	"github.com/onrik/yaconf"
-	log "github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
+
+	"github.com/onrik/yaconf"
+	log "github.com/sirupsen/logrus"
 )
 
 type App struct {
 	cfg    Config
 	tg     *TgClient
 	appDir string
-	dc     *DrovaCient
+	dc     *DrovaClient
 }
 
 func NewApp() (*App, error) {
@@ -46,6 +47,7 @@ func NewApp() (*App, error) {
 
 	cfg.hostName = stationName
 	cfg.serverID = serverID
+	cfg.authToken = authToken
 
 	tg, err := NewTgClient(cfg.BotToken, cfg.ChatID, cfg.viewHostname, cfg.hostName, cfg.UserID, cfg.serverID)
 	if err != nil {
@@ -58,7 +60,7 @@ func NewApp() (*App, error) {
 		return nil, fmt.Errorf("[ERROR] Ошибка получения текущей деректории: %v", err)
 	}
 
-	dc := NewDrovaCient()
+	dc := NewDrovaClient()
 
 	return &App{
 		cfg:    cfg,
@@ -101,7 +103,7 @@ func (a *App) Start() {
 	go a.esmeCheck() // запуск мониторинга сервиса дров
 
 	if a.cfg.CommandON {
-		go a.tg.commandBot()
+		go a.commandBot()
 	}
 
 	if a.cfg.TrialON {

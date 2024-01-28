@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/StackExchange/wmi"
-	"github.com/shirou/gopsutil/disk"
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/sys/windows/registry"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/StackExchange/wmi"
+	"github.com/shirou/gopsutil/disk"
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/windows/registry"
 )
 
 // проверка файлов античитов
@@ -38,7 +39,7 @@ func (a *App) antiCheat() error {
 	return nil
 }
 
-// проверяем свободное место на дисках
+// Проверяем свободное место на дисках
 func (a *App) diskSpace() error {
 	if !a.cfg.CheckFreeSpace {
 		return nil
@@ -52,7 +53,7 @@ func (a *App) diskSpace() error {
 	for _, partition := range partitions {
 		usageStat, err := disk.Usage(partition.Mountpoint)
 		if err != nil {
-			return fmt.Errorf("[ERROR] Ошибка получения данных для диска %s: %v. %s\n", partition.Mountpoint, err)
+			return fmt.Errorf("[ERROR] Ошибка получения данных для диска %s: %v", partition.Mountpoint, err)
 		}
 
 		freeSpace := float32(usageStat.Free) / (1024 * 1024 * 1024)
@@ -63,7 +64,7 @@ func (a *App) diskSpace() error {
 
 	// Если text не пустой, значит есть диск со свободным местом менее 10%, отправляем сообщение
 	if text.Len() > 0 {
-		message := fmt.Sprintf("Внимание!%s\n%s", text)
+		message := fmt.Sprintf("Внимание!\n%s", text.String())
 		err := a.tg.SendMessage(message)
 		if err != nil {
 			return fmt.Errorf("[ERROR] Ошибка отправки сообщения: %s", err)
@@ -73,7 +74,7 @@ func (a *App) diskSpace() error {
 	return nil
 }
 
-// оповещение о включении станции
+// Оповещение о включении станции
 func (a *App) messageStartWin() error {
 	var osInfo []Win32Operatingsystem
 	err := wmi.Query("SELECT LastBootUpTime FROM Win32_OperatingSystem", &osInfo)
@@ -103,7 +104,7 @@ func (a *App) messageStartWin() error {
 	return nil
 }
 
-// проверка на валидность токена
+// Проверка на валидность токена
 func validToken(regFolder, authToken string) {
 	for {
 		authTokenV, err := regGet(regFolder, "auth_token") // получаем токен для авторизации
@@ -119,13 +120,18 @@ func validToken(regFolder, authToken string) {
 	}
 }
 
-// получаем данные из реестра
+// Получаем данные из реестра
 func regGet(regFolder, keys string) (string, error) {
 	key, err := registry.OpenKey(registry.LOCAL_MACHINE, regFolder, registry.QUERY_VALUE)
 	if err != nil {
 		return "", fmt.Errorf("ошибка открытия ключа реестра: %v", err)
 	}
-	defer key.Close()
+	defer func(key registry.Key) {
+		err := key.Close()
+		if err != nil {
+			log.Println("key.Close(): ", err)
+		}
+	}(key)
 
 	value, _, err := key.GetStringValue(keys)
 	if err != nil {
@@ -139,9 +145,9 @@ func regGet(regFolder, keys string) (string, error) {
 func (a *App) esmeCheck() {
 	var i, y uint8 = 0, 0
 	for {
-		// если процесс не запущен, с каждой следующей проверкой увеличиваем задержку отправки сообщения
+		// Если процесс не запущен, с каждой следующей проверкой увеличиваем задержку отправки сообщения
 		// используя переменную i. 2-е оповещение через 20минут после первого, 3-е через 30минут после второго
-		// после отправки 3х сообщений, отправляем оповещение\напоминание с интервалом в 2часа
+		// после отправки 3‑х сообщений, отправляем оповещение\напоминание с интервалом в 2часа
 		if i < 3 {
 			for y = 0; y <= i; y++ {
 				time.Sleep(5 * time.Minute) // интервал проверки
@@ -150,7 +156,7 @@ func (a *App) esmeCheck() {
 			time.Sleep(60 * time.Minute) // интервал проверки
 		}
 
-		statusSession, statusServer, public, err := statusServSession()
+		statusSession, statusServer, public, err := a.statusServSession()
 		if err != nil {
 			log.Println("[ERROR] Ошибка получения статусов: ", err)
 		} else {
@@ -161,7 +167,7 @@ func (a *App) esmeCheck() {
 			if !ch || (statusServer == "OFFLINE" && public) { // если сервис не запущен
 				var chatMessage string
 				time.Sleep(2 * time.Minute)
-				_, statusServer, _, err := statusServSession()
+				_, statusServer, _, err := a.statusServSession()
 				if err != nil {
 					log.Println("[ERROR] Ошибка получения статусов: ", err)
 				} else {
@@ -172,7 +178,7 @@ func (a *App) esmeCheck() {
 						if err != nil {
 							log.Println("[ERROR] Ошибка отправки сообщения: ", err)
 						}
-						go delayReboot(10)
+						go a.delayReboot(10)
 						log.Printf("[INFO] Станции %s offline\n", a.cfg.hostName) // записываем в лог
 						i++                                                       // ведем счет отправленных сообщений
 					}
